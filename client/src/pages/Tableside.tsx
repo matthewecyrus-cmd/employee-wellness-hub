@@ -81,6 +81,41 @@ function buildGCalUrl(params: {
   return url.toString();
 }
 
+/**
+ * Builds an Android intent:// URI using ACTION_INSERT so the OS opens the
+ * native calendar event-save screen directly on the first tap.
+ * Falls back to the Google Calendar URL if no calendar app handles the intent.
+ */
+function buildAndroidIntentUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+}): string {
+  const gcalFallback = encodeURIComponent(buildGCalUrl(params));
+  const parts = [
+    "intent://com.android.calendar/events",
+    "#Intent",
+    "scheme=content",
+    "action=android.intent.action.INSERT",
+    "type=vnd.android.cursor.item%2Fevent",
+    `S.title=${encodeURIComponent(params.title)}`,
+    ...(params.location ? [`S.eventLocation=${encodeURIComponent(params.location)}`] : []),
+    ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
+    `l.beginTime=${params.start.getTime()}`,
+    `l.endTime=${params.end.getTime()}`,
+    `S.browser_fallback_url=${gcalFallback}`,
+    "end",
+  ];
+  return parts.join(";");
+}
+
+/** Returns true when running on an Android browser. */
+function isAndroid(): boolean {
+  return /android/i.test(navigator.userAgent);
+}
+
 /** Generates a valid RFC 5545 .ics Blob in the browser (no server). */
 function buildIcsBlob(params: {
   sessionId: number;
@@ -273,20 +308,41 @@ export default function Tableside() {
                   </button>
                 ) : (
                   <div className="mt-4 space-y-2">
-                    {/* Google Calendar */}
-                    <a
-                      href={buildGCalUrl({ title: session.title, start, end, location: session.location })}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                      style={{
-                        background: accent.gradient,
-                        boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                      }}
-                    >
-                      <CalendarPlus className="h-4 w-4" />
-                      Google Calendar
-                    </a>
+                    {/* Android: intent:// URI — OS routes directly to Samsung/Google Calendar event-save screen */}
+                    {/* Non-Android: Google Calendar URL in same tab */}
+                    {isAndroid() ? (
+                      <a
+                        href={buildAndroidIntentUrl({
+                          title: session.title,
+                          start,
+                          end,
+                          location: session.location,
+                          description: session.description,
+                        })}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                        style={{
+                          background: accent.gradient,
+                          boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                        }}
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                        Add to Calendar
+                      </a>
+                    ) : (
+                      <a
+                        href={buildGCalUrl({ title: session.title, start, end, location: session.location })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                        style={{
+                          background: accent.gradient,
+                          boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                        }}
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                        Google Calendar
+                      </a>
+                    )}
 
                     {/* Apple / Outlook — plain server link, no JS, iOS Safari intercepts inline .ics */}
                     <a
