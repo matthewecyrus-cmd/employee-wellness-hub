@@ -26,6 +26,28 @@ function isIOS(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
+/** Formats a Date to Google Calendar's YYYYMMDDTHHmmssZ format */
+function toGCalDate(d: Date): string {
+  return d.toISOString().replace(/[-:.]/g, "").replace(/\d{3}Z$/, "Z");
+}
+
+/** Builds a Google Calendar event creation URL entirely client-side */
+function buildGCalUrl(session: {
+  title: string;
+  startTime: Date;
+  endTime: Date;
+  location?: string | null;
+  description?: string | null;
+}): string {
+  const p = new URLSearchParams({
+    text: session.title,
+    dates: `${toGCalDate(session.startTime)}/${toGCalDate(session.endTime)}`,
+    ...(session.location ? { location: session.location } : {}),
+    ...(session.description ? { details: session.description } : {}),
+  });
+  return `https://calendar.google.com/calendar/r/eventedit?${p.toString()}`;
+}
+
 // Accent colors for each session card (cycles through 4)
 const SESSION_ACCENTS = [
   { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)", solid: "#7C3AED" },
@@ -41,11 +63,25 @@ export default function Tableside() {
 
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
 
-  const handleAddToCalendar = (sessionId: number) => {
-    // iOS Safari handles .ics natively — the server detects the UA and serves
-    // the file inline, which triggers the "Add to Calendar" sheet automatically.
-    // Android Chrome doesn't handle .ics — the server redirects to Google Calendar.
-    window.location.href = `/api/calendar/${sessionId}`;
+  const handleAddToCalendar = (session: typeof sessions[number]) => {
+    if (isIOS()) {
+      // iOS Safari: hit the server endpoint which serves .ics inline.
+      // Safari intercepts it and shows the native "Add to Calendar" sheet.
+      window.location.href = `/api/calendar/${session.id}`;
+    } else {
+      // Android / desktop: build the Google Calendar URL client-side and open
+      // in a new tab. This avoids the Android OS intercepting the server
+      // redirect as an .ics download and opening the stock calendar with a
+      // blank event.
+      const url = buildGCalUrl({
+        title: session.title,
+        startTime: new Date(session.startTime),
+        endTime: new Date(session.endTime),
+        location: session.location,
+        description: session.description,
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   return (
@@ -169,7 +205,7 @@ export default function Tableside() {
                 <div className="mt-4 space-y-2">
                   {/* Primary button — smart routing (iOS → .ics, Android → Google Cal) */}
                   <button
-                    onClick={() => handleAddToCalendar(session.id)}
+                    onClick={() => handleAddToCalendar(session)}
                     className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                     style={{
                       background: accent.gradient,
