@@ -92,8 +92,12 @@ function buildAndroidIntentUrl(params: {
   end: Date;
   location?: string | null;
   description?: string | null;
+  sessionId: number;
 }): string {
-  const gcalFallback = encodeURIComponent(buildGCalUrl(params));
+  // Fallback to the real .ics endpoint — not Google Calendar
+  const icsFallback = encodeURIComponent(
+    `${window.location.origin}/api/tableside/${params.sessionId}.ics`
+  );
   const parts = [
     "intent://com.android.calendar/events",
     "#Intent",
@@ -105,7 +109,7 @@ function buildAndroidIntentUrl(params: {
     ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
     `l.beginTime=${params.start.getTime()}`,
     `l.endTime=${params.end.getTime()}`,
-    `S.browser_fallback_url=${gcalFallback}`,
+    `S.browser_fallback_url=${icsFallback}`,
     "end",
   ];
   return parts.join(";");
@@ -318,6 +322,7 @@ export default function Tableside() {
                           end,
                           location: session.location,
                           description: session.description,
+                          sessionId: session.id,
                         })}
                         className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                         style={{
