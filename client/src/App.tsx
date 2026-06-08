@@ -5,31 +5,43 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Tableside from "./pages/Tableside";
+import Admin from "./pages/Admin";
+import LunchLearn from "./pages/LunchLearn";
+import Resources from "./pages/Resources";
+import HealthCoaching from "./pages/HealthCoaching";
+import Safety from "./pages/Safety";
+import MensHealth from "./pages/MensHealth";
+import Announcements from "./pages/Announcements";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      {/* Hub home — the single QR code destination */}
+      <Route path="/" component={Home} />
+
+      {/* Wellness section pages */}
+      <Route path="/tableside" component={Tableside} />
+      <Route path="/lunch-learn" component={LunchLearn} />
+      <Route path="/resources" component={Resources} />
+      <Route path="/health-coaching" component={HealthCoaching} />
+      <Route path="/safety" component={Safety} />
+      <Route path="/mens-health" component={MensHealth} />
+      <Route path="/announcements" component={Announcements} />
+
+      {/* Admin panel — owner only */}
+      <Route path="/admin" component={Admin} />
+
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />

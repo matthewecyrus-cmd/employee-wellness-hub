@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1780920135496,
+      "tag": "0000_tense_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1780920278467,
+      "tag": "0001_amazing_daimon_hellstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1780920311481,
+      "tag": "0002_nervous_aaron_stack",
+      "breakpoints": true
+    }
+  ]
 }
