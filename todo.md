@@ -42,3 +42,11 @@
 - [x] Vitest tests for .ics endpoint and tRPC procedures
 - [x] QR code display page for admin (hub URL shown in admin panel)
 - [x] Checkpoint saved
+
+## Tableside Session Update - June 2026
+
+- [x] Insert/update 4 tableside sessions in DB (Tension Relief with a Thera-Cane)
+- [x] Update Tableside.tsx to show 4 session cards with individual calendar buttons
+- [x] Update hub-employee.html with 4 session cards and individual calendar buttons
+- [x] Push updated HTML to GitHub Pages
+- [ ] Save checkpoint

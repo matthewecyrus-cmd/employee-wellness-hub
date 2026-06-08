@@ -21,6 +21,14 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+// Accent colors for each session card (cycles through 4)
+const SESSION_ACCENTS = [
+  { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)" },
+  { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)" },
+  { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)" },
+  { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)" },
+];
+
 export default function Tableside() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -47,7 +55,7 @@ export default function Tableside() {
 
         <div className="relative">
           <Link href="/">
-            <button className="mb-4 flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+            <button className="mb-4 flex items-center gap-2 rounded-lg bg-slate-700/60 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-150 active:scale-95">
               <ArrowLeft className="h-4 w-4" />
               Back to Hub
             </button>
@@ -76,19 +84,19 @@ export default function Tableside() {
       </header>
 
       {/* ── Instruction Banner ────────────────────────────────────────────── */}
-      <div className="mx-4 mb-4 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
+      <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
-          <span className="font-semibold">Tap "Add to Calendar"</span> on any session
-          below — your phone will instantly open the calendar save screen. No extra
-          steps.
+          <span className="font-semibold">Pick a session that works for you</span> and tap
+          "Add to Calendar" — your phone opens the calendar save screen instantly. No
+          downloads, no extra steps.
         </p>
       </div>
 
       {/* ── Session Cards ─────────────────────────────────────────────────── */}
-      <main className="space-y-3 px-4 pb-10">
+      <main className="space-y-4 px-4 pb-10">
         {isLoading &&
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-36 animate-pulse rounded-2xl bg-slate-700/50" />
+            <div key={i} className="h-44 animate-pulse rounded-2xl bg-slate-700/50" />
           ))}
 
         {!isLoading && sessions.length === 0 && (
@@ -104,40 +112,51 @@ export default function Tableside() {
         {sessions.map((session, i) => {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
-          const staggerClass = `stagger-${Math.min(i + 1, 7)}`;
+          const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
 
           return (
             <div
               key={session.id}
-              className={`animate-fade-up ${staggerClass} overflow-hidden rounded-2xl bg-white shadow-lg`}
+              className="overflow-hidden rounded-2xl bg-white shadow-lg"
+              style={{ animationDelay: `${i * 80}ms` }}
             >
               {/* Color accent bar */}
-              <div className="h-1.5 w-full" style={{ background: "linear-gradient(90deg, #7C3AED, #9F67FF)" }} />
+              <div className="h-1.5 w-full" style={{ background: accent.gradient }} />
 
               <div className="p-4">
-                <h2 className="font-display text-base font-bold leading-snug text-slate-900" style={{ fontFamily: "Poppins, Inter, sans-serif" }}>
+                {/* Session number badge */}
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ background: accent.gradient }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Option {i + 1}
+                  </span>
+                </div>
+
+                <h2
+                  className="font-display text-base font-bold leading-snug text-slate-900"
+                  style={{ fontFamily: "Poppins, Inter, sans-serif" }}
+                >
                   {session.title}
                 </h2>
 
-                {session.description && (
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                    {session.description}
-                  </p>
-                )}
-
-                <div className="mt-3 space-y-1.5">
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
-                    <Clock className="h-4 w-4 shrink-0 text-purple-600" />
-                    <span>
-                      <span className="font-semibold">{formatDay(start)}</span>
-                      <span className="ml-1 text-slate-500">{formatTimeRange(start, end)}</span>
-                    </span>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-start gap-2 text-sm text-slate-700">
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
+                    <div>
+                      <div className="font-semibold">{formatDay(start)}</div>
+                      <div className="text-slate-500">{formatTimeRange(start, end)}</div>
+                    </div>
                   </div>
 
                   {session.location && (
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <MapPin className="h-4 w-4 shrink-0 text-purple-600" />
-                      <span>{session.location}</span>
+                      <span className="font-medium">{session.location}</span>
                     </div>
                   )}
                 </div>
@@ -147,17 +166,24 @@ export default function Tableside() {
                   onClick={() => handleAddToCalendar(session.id)}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                   style={{
-                    background: "linear-gradient(135deg, #7C3AED 0%, #9F67FF 100%)",
-                    boxShadow: "0 4px 14px -2px rgba(124,58,237,0.5)",
+                    background: accent.gradient,
+                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
                   }}
                 >
                   <CalendarPlus className="h-4 w-4" />
-                  Add to Calendar
+                  Add to My Calendar
                 </button>
               </div>
             </div>
           );
         })}
+
+        {/* Footer note */}
+        {!isLoading && sessions.length > 0 && (
+          <p className="pt-2 text-center text-xs text-slate-500">
+            Each button adds only that session to your calendar.
+          </p>
+        )}
       </main>
     </div>
   );
