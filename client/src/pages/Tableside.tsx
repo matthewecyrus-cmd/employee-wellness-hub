@@ -91,22 +91,21 @@ function buildIcsBlob(params: {
 }
 
 /**
- * Triggers a synthetic anchor click to open/download the Blob.
- * Because the data is generated locally, Android treats it as an internal
- * file action and routes it to the calendar app instead of the download manager.
+ * Opens the Blob via a synthetic anchor click WITHOUT a download attribute.
+ * Omitting `download` tells the browser to "open" the content rather than
+ * save it — Android sees text/calendar and hands it off to the calendar app.
+ * Immediate cleanup (100ms) prevents the file from lingering in the cache.
  */
-function downloadIcsBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  // Clean up after a short delay to allow the click to register
+function openIcsBlob(blob: Blob): void {
+  const link = document.createElement("a");
+  link.href = window.URL.createObjectURL(blob);
+  // DO NOT set link.download — that forces a file save instead of an open
+  document.body.appendChild(link);
+  link.click();
   setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 200);
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(link.href);
+  }, 100);
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -133,7 +132,7 @@ export default function Tableside() {
       location: session.location,
       description: session.description,
     });
-    downloadIcsBlob(blob, `wellness-session-${session.id}.ics`);
+    openIcsBlob(blob);
   };
 
   return (
