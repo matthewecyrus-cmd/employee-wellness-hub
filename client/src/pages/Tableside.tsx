@@ -113,10 +113,14 @@ function buildIcsBlob(params: {
   return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
 }
 
-/** Opens the .ics via a data URI — the browser hands text/calendar to the OS calendar app. */
+/** Opens the .ics via a data URI anchor click — no download attribute so the OS routes it to the calendar app. */
 function openIcsDataUri(icsString: string): void {
-  const dataUri = 'data:text/calendar;charset=utf8,' + encodeURIComponent(icsString);
-  window.location.href = dataUri;
+  const a = document.createElement('a');
+  a.href = 'data:text/calendar;charset=utf8,' + encodeURIComponent(icsString);
+  // Do NOT set a.download
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // Accent colors for each session card (cycles through 4)
