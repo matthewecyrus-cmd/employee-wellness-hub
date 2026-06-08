@@ -21,12 +21,100 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+/** Formats a Date to iCalendar UTC format: YYYYMMDDTHHmmssZ */
+function toIcsDate(d: Date): string {
+  return d.toISOString().replace(/[-:.]/g, "").replace(/\d{3}Z$/, "Z");
+}
+
+/** Escapes special characters in iCalendar text values per RFC 5545 */
+function escapeIcs(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\n/g, "\\n");
+}
+
+/** Folds long lines at 75 octets per RFC 5545 */
+function foldLine(line: string): string {
+  const MAX = 75;
+  if (line.length <= MAX) return line;
+  let result = "";
+  let pos = 0;
+  while (pos < line.length) {
+    if (pos === 0) {
+      result += line.slice(0, MAX);
+      pos = MAX;
+    } else {
+      result += "\r\n " + line.slice(pos, pos + MAX - 1);
+      pos += MAX - 1;
+    }
+  }
+  return result;
+}
+
+/**
+ * Generates a valid RFC 5545 .ics string entirely in the browser.
+ * No server round-trip — the data is created locally as a Blob.
+ */
+function buildIcsBlob(params: {
+  sessionId: number;
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+}): Blob {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Employee Wellness Hub//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    foldLine(`UID:tableside-session-${params.sessionId}@employee-wellness-hub`),
+    foldLine(`DTSTAMP:${toIcsDate(new Date())}`),
+    foldLine(`DTSTART:${toIcsDate(params.start)}`),
+    foldLine(`DTEND:${toIcsDate(params.end)}`),
+    foldLine(`SUMMARY:${escapeIcs(params.title)}`),
+    ...(params.location ? [foldLine(`LOCATION:${escapeIcs(params.location)}`)] : []),
+    ...(params.description ? [foldLine(`DESCRIPTION:${escapeIcs(params.description)}`)] : []),
+    "STATUS:CONFIRMED",
+    "TRANSP:OPAQUE",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+
+  // RFC 5545 requires CRLF line endings
+  const icsContent = lines.join("\r\n") + "\r\n";
+  return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+}
+
+/**
+ * Triggers a synthetic anchor click to open/download the Blob.
+ * Because the data is generated locally, Android treats it as an internal
+ * file action and routes it to the calendar app instead of the download manager.
+ */
+function downloadIcsBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  // Clean up after a short delay to allow the click to register
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 200);
+}
+
 // Accent colors for each session card (cycles through 4)
 const SESSION_ACCENTS = [
-  { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)", solid: "#7C3AED" },
-  { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)", solid: "#0EA5E9" },
-  { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)", solid: "#10B981" },
-  { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)", solid: "#F59E0B" },
+  { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)" },
+  { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)" },
+  { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)" },
+  { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)" },
 ];
 
 export default function Tableside() {
@@ -35,6 +123,18 @@ export default function Tableside() {
   const year = now.getFullYear();
 
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
+
+  const handleAddToCalendar = (session: typeof sessions[number]) => {
+    const blob = buildIcsBlob({
+      sessionId: session.id,
+      title: session.title,
+      start: new Date(session.startTime),
+      end: new Date(session.endTime),
+      location: session.location,
+      description: session.description,
+    });
+    downloadIcsBlob(blob, `wellness-session-${session.id}.ics`);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -110,7 +210,6 @@ export default function Tableside() {
             <div
               key={session.id}
               className="overflow-hidden rounded-2xl bg-white shadow-lg"
-              style={{ animationDelay: `${i * 80}ms` }}
             >
               {/* Color accent bar */}
               <div className="h-1.5 w-full" style={{ background: accent.gradient }} />
@@ -153,9 +252,9 @@ export default function Tableside() {
                   )}
                 </div>
 
-                {/* Single calendar CTA — downloads the .ics file */}
-                <a
-                  href={`/api/calendar/${session.id}`}
+                {/* Calendar CTA — generates .ics locally via Blob, no server download */}
+                <button
+                  onClick={() => handleAddToCalendar(session)}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                   style={{
                     background: accent.gradient,
@@ -164,13 +263,12 @@ export default function Tableside() {
                 >
                   <CalendarPlus className="h-4 w-4" />
                   Add to My Calendar
-                </a>
+                </button>
               </div>
             </div>
           );
         })}
 
-        {/* Footer note */}
         {!isLoading && sessions.length > 0 && (
           <p className="pt-2 text-center text-xs text-slate-500">
             Each button saves only that session to your calendar.
