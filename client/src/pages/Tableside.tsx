@@ -288,35 +288,14 @@ export default function Tableside() {
                       Google Calendar
                     </a>
 
-                    {/* Apple / Outlook — .ics download */}
-                    <button
-                        onClick={() => {
-                          const lines = [
-                            "BEGIN:VCALENDAR",
-                            "VERSION:2.0",
-                            "PRODID:-//Employee Wellness Hub//EN",
-                            "CALSCALE:GREGORIAN",
-                            "METHOD:PUBLISH",
-                            "BEGIN:VEVENT",
-                            `UID:tableside-session-${session.id}@employee-wellness-hub`,
-                            `DTSTAMP:${toIcsDate(new Date())}`,
-                            `DTSTART:${toIcsDate(start)}`,
-                            `DTEND:${toIcsDate(end)}`,
-                            `SUMMARY:${escapeIcs(session.title)}`,
-                            ...(session.location ? [`LOCATION:${escapeIcs(session.location)}`] : []),
-                            ...(session.description ? [`DESCRIPTION:${escapeIcs(session.description)}`] : []),
-                            "STATUS:CONFIRMED",
-                            "END:VEVENT",
-                            "END:VCALENDAR",
-                          ];
-                          openIcsDataUri(lines.join("\r\n") + "\r\n");
-                          setExpandedId(null);
-                        }}
+                    {/* Apple / Outlook — plain server link, no JS, iOS Safari intercepts inline .ics */}
+                    <a
+                      href={`/api/tableside/${session.id}.ics`}
                       className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95 hover:bg-slate-100"
                     >
                       <CalendarPlus className="h-4 w-4" />
                       Apple / Outlook Calendar
-                    </button>
+                    </a>
 
                     {/* Cancel */}
                     <button

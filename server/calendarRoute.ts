@@ -90,6 +90,46 @@ function buildIcsContent(params: {
 
 export function registerCalendarRoute(app: Express): void {
   /**
+   * GET /api/tableside/:id.ics
+   *
+   * Plain server endpoint for the Apple / Outlook Calendar <a> link.
+   * Returns the ICS with Content-Disposition: inline so iOS Safari intercepts
+   * it and shows the native "Add to Calendar" sheet without any JS tricks.
+   */
+  app.get("/api/tableside/:id.ics", async (req: Request, res: Response) => {
+    const sessionId = parseInt(req.params.id, 10);
+
+    if (isNaN(sessionId)) {
+      res.status(400).send("Invalid session ID");
+      return;
+    }
+
+    const session = await getTablesideSessionById(sessionId);
+
+    if (!session) {
+      res.status(404).send("Session not found");
+      return;
+    }
+
+    const start = new Date(session.startTime);
+    const end = new Date(session.endTime);
+
+    const icsContent = buildIcsContent({
+      sessionId: session.id,
+      title: session.title,
+      start,
+      end,
+      location: session.location || undefined,
+      description: session.description || undefined,
+    });
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `inline; filename="tableside-session-${session.id}.ics"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).send(icsContent);
+  });
+
+  /**
    * GET /api/calendar/:sessionId
    *
    * Serves a valid RFC 5545 .ics file for all devices.
