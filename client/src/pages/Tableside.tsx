@@ -113,18 +113,10 @@ function buildIcsBlob(params: {
   return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
 }
 
-/** Triggers a .ics file download for Apple Calendar / Outlook. */
-function downloadIcs(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  // No download attribute — lets iOS Safari open the .ics natively instead of saving
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 150);
+/** Opens the .ics via a data URI — the browser hands text/calendar to the OS calendar app. */
+function openIcsDataUri(icsString: string): void {
+  const dataUri = 'data:text/calendar;charset=utf8,' + encodeURIComponent(icsString);
+  window.location.href = dataUri;
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -294,18 +286,28 @@ export default function Tableside() {
 
                     {/* Apple / Outlook — .ics download */}
                     <button
-                      onClick={() => {
-                        const blob = buildIcsBlob({
-                          sessionId: session.id,
-                          title: session.title,
-                          start,
-                          end,
-                          location: session.location,
-                          description: session.description,
-                        });
-                        downloadIcs(blob, `wellness-session-${session.id}.ics`);
-                        setExpandedId(null);
-                      }}
+                        onClick={() => {
+                          const lines = [
+                            "BEGIN:VCALENDAR",
+                            "VERSION:2.0",
+                            "PRODID:-//Employee Wellness Hub//EN",
+                            "CALSCALE:GREGORIAN",
+                            "METHOD:PUBLISH",
+                            "BEGIN:VEVENT",
+                            `UID:tableside-session-${session.id}@employee-wellness-hub`,
+                            `DTSTAMP:${toIcsDate(new Date())}`,
+                            `DTSTART:${toIcsDate(start)}`,
+                            `DTEND:${toIcsDate(end)}`,
+                            `SUMMARY:${escapeIcs(session.title)}`,
+                            ...(session.location ? [`LOCATION:${escapeIcs(session.location)}`] : []),
+                            ...(session.description ? [`DESCRIPTION:${escapeIcs(session.description)}`] : []),
+                            "STATUS:CONFIRMED",
+                            "END:VEVENT",
+                            "END:VCALENDAR",
+                          ];
+                          openIcsDataUri(lines.join("\r\n") + "\r\n");
+                          setExpandedId(null);
+                        }}
                       className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95 hover:bg-slate-100"
                     >
                       <CalendarPlus className="h-4 w-4" />
