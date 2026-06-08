@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
 import { Link } from "wouter";
@@ -19,6 +20,18 @@ function formatTimeRange(start: Date, end: Date): string {
   const fmt = (d: Date) =>
     d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return `${fmt(start)} – ${fmt(end)}`;
+}
+
+/**
+ * Formats a Date to Google Calendar's required format: YYYYMMDDTHHmmss (NO Z suffix).
+ * Google Calendar interprets the times as local, so we use local time components.
+ */
+function toGCalDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
 }
 
 /** Formats a Date to iCalendar UTC format: YYYYMMDDTHHmmssZ */
@@ -53,10 +66,22 @@ function foldLine(line: string): string {
   return result;
 }
 
-/**
- * Generates a valid RFC 5545 .ics string entirely in the browser.
- * No server round-trip — the data is created locally as a Blob.
- */
+/** Builds a Google Calendar "add event" URL with local-time dates (no Z suffix). */
+function buildGCalUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+}): string {
+  const url = new URL("https://calendar.google.com/calendar/render");
+  url.searchParams.set("action", "TEMPLATE");
+  url.searchParams.set("text", params.title);
+  url.searchParams.set("dates", `${toGCalDate(params.start)}/${toGCalDate(params.end)}`);
+  if (params.location) url.searchParams.set("location", params.location);
+  return url.toString();
+}
+
+/** Generates a valid RFC 5545 .ics Blob in the browser (no server). */
 function buildIcsBlob(params: {
   sessionId: number;
   title: string;
@@ -84,73 +109,22 @@ function buildIcsBlob(params: {
     "END:VEVENT",
     "END:VCALENDAR",
   ];
-
-  // RFC 5545 requires CRLF line endings
   const icsContent = lines.join("\r\n") + "\r\n";
   return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
 }
 
-/** Detects iOS */
-function isIOS(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
-/**
- * iOS: opens the Blob via a synthetic anchor click (no download attribute).
- * Safari intercepts text/calendar and shows the native "Add to Calendar" sheet.
- */
-function openIcsBlob(blob: Blob): void {
-  const link = document.createElement("a");
-  link.href = window.URL.createObjectURL(blob);
-  document.body.appendChild(link);
-  link.click();
+/** Triggers a .ics file download for Apple Calendar / Outlook. */
+function downloadIcs(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
   setTimeout(() => {
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(link.href);
-  }, 100);
-}
-
-/**
- * Android: fires an intent:// URI so Chrome hands the calendar data to the
- * OS intent resolver — bypassing the download manager entirely.
- * Samsung Calendar, Google Calendar, and most Android calendar apps respond
- * to android.intent.action.INSERT for the EVENTS content provider.
- * Falls back to Google Calendar in the browser if no app handles the intent.
- */
-function openAndroidIntent(params: {
-  title: string;
-  start: Date;
-  end: Date;
-  location?: string | null;
-  description?: string | null;
-}): void {
-  const startMs = params.start.getTime();
-  const endMs = params.end.getTime();
-
-  // Build the Google Calendar fallback URL (used when no calendar app is installed)
-  const gcalFallback = encodeURIComponent(
-    `https://calendar.google.com/calendar/r/eventedit` +
-    `?text=${encodeURIComponent(params.title)}` +
-    `&dates=${toIcsDate(params.start)}/${toIcsDate(params.end)}` +
-    (params.location ? `&location=${encodeURIComponent(params.location)}` : "")
-  );
-
-  // intent:// URI targeting the Android CalendarContract.Events INSERT action.
-  // This is the same mechanism calendar apps use internally — Chrome passes it
-  // to the OS which presents an app chooser or opens the default calendar app.
-  const intentUri =
-    `intent:#Intent;` +
-    `action=android.intent.action.INSERT;` +
-    `type=vnd.android.cursor.dir/event;` +
-    `S.title=${encodeURIComponent(params.title)};` +
-    `l.beginTime=${startMs};` +
-    `l.endTime=${endMs};` +
-    (params.location ? `S.eventLocation=${encodeURIComponent(params.location)};` : "") +
-    (params.description ? `S.description=${encodeURIComponent(params.description)};` : "") +
-    `S.browser_fallback_url=${gcalFallback};` +
-    `end`;
-
-  window.location.href = intentUri;
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 150);
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -168,32 +142,8 @@ export default function Tableside() {
 
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
 
-  const handleAddToCalendar = (session: typeof sessions[number]) => {
-    const start = new Date(session.startTime);
-    const end = new Date(session.endTime);
-
-    if (isIOS()) {
-      // iOS Safari: Blob + synthetic click triggers native "Add to Calendar" sheet
-      const blob = buildIcsBlob({
-        sessionId: session.id,
-        title: session.title,
-        start,
-        end,
-        location: session.location,
-        description: session.description,
-      });
-      openIcsBlob(blob);
-    } else {
-      // Android: intent:// URI hands the event directly to the OS calendar intent
-      openAndroidIntent({
-        title: session.title,
-        start,
-        end,
-        location: session.location,
-        description: session.description,
-      });
-    }
-  };
+  // Track which session card has its calendar options expanded (null = none)
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -264,6 +214,7 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
+          const isExpanded = expandedId === session.id;
 
           return (
             <div
@@ -311,18 +262,65 @@ export default function Tableside() {
                   )}
                 </div>
 
-                {/* Calendar CTA — generates .ics locally via Blob, no server download */}
-                <button
-                  onClick={() => handleAddToCalendar(session)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                  style={{
-                    background: accent.gradient,
-                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                  }}
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Add to My Calendar
-                </button>
+                {/* ── Calendar CTA ──────────────────────────────────────── */}
+                {!isExpanded ? (
+                  <button
+                    onClick={() => setExpandedId(session.id)}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Add to My Calendar
+                  </button>
+                ) : (
+                  <div className="mt-4 space-y-2">
+                    {/* Google Calendar */}
+                    <a
+                      href={buildGCalUrl({ title: session.title, start, end, location: session.location })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                      style={{
+                        background: accent.gradient,
+                        boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                      }}
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      Google Calendar
+                    </a>
+
+                    {/* Apple / Outlook — .ics download */}
+                    <button
+                      onClick={() => {
+                        const blob = buildIcsBlob({
+                          sessionId: session.id,
+                          title: session.title,
+                          start,
+                          end,
+                          location: session.location,
+                          description: session.description,
+                        });
+                        downloadIcs(blob, `wellness-session-${session.id}.ics`);
+                        setExpandedId(null);
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95 hover:bg-slate-100"
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      Apple / Outlook Calendar
+                    </button>
+
+                    {/* Cancel */}
+                    <button
+                      onClick={() => setExpandedId(null)}
+                      className="w-full py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
