@@ -90,22 +90,67 @@ function buildIcsBlob(params: {
   return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
 }
 
+/** Detects iOS */
+function isIOS(): boolean {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 /**
- * Opens the Blob via a synthetic anchor click WITHOUT a download attribute.
- * Omitting `download` tells the browser to "open" the content rather than
- * save it — Android sees text/calendar and hands it off to the calendar app.
- * Immediate cleanup (100ms) prevents the file from lingering in the cache.
+ * iOS: opens the Blob via a synthetic anchor click (no download attribute).
+ * Safari intercepts text/calendar and shows the native "Add to Calendar" sheet.
  */
 function openIcsBlob(blob: Blob): void {
   const link = document.createElement("a");
   link.href = window.URL.createObjectURL(blob);
-  // DO NOT set link.download — that forces a file save instead of an open
   document.body.appendChild(link);
   link.click();
   setTimeout(() => {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(link.href);
   }, 100);
+}
+
+/**
+ * Android: fires an intent:// URI so Chrome hands the calendar data to the
+ * OS intent resolver — bypassing the download manager entirely.
+ * Samsung Calendar, Google Calendar, and most Android calendar apps respond
+ * to android.intent.action.INSERT for the EVENTS content provider.
+ * Falls back to Google Calendar in the browser if no app handles the intent.
+ */
+function openAndroidIntent(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+}): void {
+  const startMs = params.start.getTime();
+  const endMs = params.end.getTime();
+
+  // Build the Google Calendar fallback URL (used when no calendar app is installed)
+  const gcalFallback = encodeURIComponent(
+    `https://calendar.google.com/calendar/r/eventedit` +
+    `?text=${encodeURIComponent(params.title)}` +
+    `&dates=${toIcsDate(params.start)}/${toIcsDate(params.end)}` +
+    (params.location ? `&location=${encodeURIComponent(params.location)}` : "")
+  );
+
+  // intent:// URI targeting the Android CalendarContract.Events INSERT action.
+  // This is the same mechanism calendar apps use internally — Chrome passes it
+  // to the OS which presents an app chooser or opens the default calendar app.
+  const intentUri =
+    `intent:#Intent;` +
+    `action=android.intent.action.INSERT;` +
+    `type=vnd.android.cursor.dir/event;` +
+    `S.title=${encodeURIComponent(params.title)};` +
+    `l.beginTime=${startMs};` +
+    `l.endTime=${endMs};` +
+    (params.location ? `S.eventLocation=${encodeURIComponent(params.location)};` : "") +
+    (params.description ? `S.description=${encodeURIComponent(params.description)};` : "") +
+    `S.browser_fallback_url=${gcalFallback};` +
+    `end`;
+
+  window.location.href = intentUri;
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -124,15 +169,30 @@ export default function Tableside() {
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
 
   const handleAddToCalendar = (session: typeof sessions[number]) => {
-    const blob = buildIcsBlob({
-      sessionId: session.id,
-      title: session.title,
-      start: new Date(session.startTime),
-      end: new Date(session.endTime),
-      location: session.location,
-      description: session.description,
-    });
-    openIcsBlob(blob);
+    const start = new Date(session.startTime);
+    const end = new Date(session.endTime);
+
+    if (isIOS()) {
+      // iOS Safari: Blob + synthetic click triggers native "Add to Calendar" sheet
+      const blob = buildIcsBlob({
+        sessionId: session.id,
+        title: session.title,
+        start,
+        end,
+        location: session.location,
+        description: session.description,
+      });
+      openIcsBlob(blob);
+    } else {
+      // Android: intent:// URI hands the event directly to the OS calendar intent
+      openAndroidIntent({
+        title: session.title,
+        start,
+        end,
+        location: session.location,
+        description: session.description,
+      });
+    }
   };
 
   return (
