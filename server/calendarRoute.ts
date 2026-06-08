@@ -132,14 +132,8 @@ export function registerCalendarRoute(app: Express): void {
   /**
    * GET /api/calendar/:sessionId
    *
-   * Serves a valid RFC 5545 .ics file for all devices.
-   * - iOS Safari: intercepts the inline .ics and shows "Add to Calendar" sheet.
-   * - Android (Samsung, Pixel, etc.): downloads the .ics; Samsung Calendar and
-   *   Google Calendar both detect the download and offer to import the event.
-   * - Desktop: downloads the .ics file which any calendar app can open.
-   *
-   * The file uses Content-Disposition: attachment so Android browsers trigger
-   * the OS download handler, which routes to the calendar app.
+   * Backward-compatible alias for older links. Keep this inline so stale
+   * /api/calendar/:id links do not force the browser download flow.
    */
   app.get("/api/calendar/:sessionId", async (req: Request, res: Response) => {
     const sessionId = parseInt(req.params.sessionId, 10);
@@ -168,13 +162,9 @@ export function registerCalendarRoute(app: Express): void {
       description: session.description || undefined,
     });
 
-    const fileName = `wellness-session-${session.id}.ics`;
-
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-    // "attachment" triggers the OS download handler on Android, which routes
-    // the .ics to the calendar app. iOS Safari still intercepts it correctly.
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Content-Disposition", `inline; filename="tableside-session-${session.id}.ics"`);
+    res.setHeader("Cache-Control", "no-store");
     res.status(200).send(icsContent);
   });
 

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
 import { Link } from "wouter";
@@ -23,68 +22,9 @@ function formatTimeRange(start: Date, end: Date): string {
 }
 
 /**
- * Formats a Date to Google Calendar's required format: YYYYMMDDTHHmmss (NO Z suffix).
- * Google Calendar interprets the times as local, so we use local time components.
- */
-function toGCalDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
-    `T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-  );
-}
-
-/** Formats a Date to iCalendar UTC format: YYYYMMDDTHHmmssZ */
-function toIcsDate(d: Date): string {
-  return d.toISOString().replace(/[-:.]/g, "").replace(/\d{3}Z$/, "Z");
-}
-
-/** Escapes special characters in iCalendar text values per RFC 5545 */
-function escapeIcs(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\n/g, "\\n");
-}
-
-/** Folds long lines at 75 octets per RFC 5545 */
-function foldLine(line: string): string {
-  const MAX = 75;
-  if (line.length <= MAX) return line;
-  let result = "";
-  let pos = 0;
-  while (pos < line.length) {
-    if (pos === 0) {
-      result += line.slice(0, MAX);
-      pos = MAX;
-    } else {
-      result += "\r\n " + line.slice(pos, pos + MAX - 1);
-      pos += MAX - 1;
-    }
-  }
-  return result;
-}
-
-/** Builds a Google Calendar "add event" URL with local-time dates (no Z suffix). */
-function buildGCalUrl(params: {
-  title: string;
-  start: Date;
-  end: Date;
-  location?: string | null;
-}): string {
-  const url = new URL("https://calendar.google.com/calendar/render");
-  url.searchParams.set("action", "TEMPLATE");
-  url.searchParams.set("text", params.title);
-  url.searchParams.set("dates", `${toGCalDate(params.start)}/${toGCalDate(params.end)}`);
-  if (params.location) url.searchParams.set("location", params.location);
-  return url.toString();
-}
-
-/**
  * Builds an Android intent:// URI using ACTION_INSERT so the OS opens the
  * native calendar event-save screen directly on the first tap.
- * Falls back to the Google Calendar URL if no calendar app handles the intent.
+ * Falls back to the inline .ics endpoint if no calendar app handles the intent.
  */
 function buildAndroidIntentUrl(params: {
   title: string;
@@ -94,7 +34,6 @@ function buildAndroidIntentUrl(params: {
   description?: string | null;
   sessionId: number;
 }): string {
-  // Fallback to the real .ics endpoint — not Google Calendar
   const icsFallback = encodeURIComponent(
     `${window.location.origin}/api/tableside/${params.sessionId}.ics`
   );
@@ -103,7 +42,7 @@ function buildAndroidIntentUrl(params: {
     "#Intent",
     "scheme=content",
     "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.item%2Fevent",
+    "type=vnd.android.cursor.item/event",
     `S.title=${encodeURIComponent(params.title)}`,
     ...(params.location ? [`S.eventLocation=${encodeURIComponent(params.location)}`] : []),
     ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
@@ -120,46 +59,18 @@ function isAndroid(): boolean {
   return /android/i.test(navigator.userAgent);
 }
 
-/** Generates a valid RFC 5545 .ics Blob in the browser (no server). */
-function buildIcsBlob(params: {
-  sessionId: number;
+function buildCalendarHref(params: {
   title: string;
   start: Date;
   end: Date;
   location?: string | null;
   description?: string | null;
-}): Blob {
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Employee Wellness Hub//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    foldLine(`UID:tableside-session-${params.sessionId}@employee-wellness-hub`),
-    foldLine(`DTSTAMP:${toIcsDate(new Date())}`),
-    foldLine(`DTSTART:${toIcsDate(params.start)}`),
-    foldLine(`DTEND:${toIcsDate(params.end)}`),
-    foldLine(`SUMMARY:${escapeIcs(params.title)}`),
-    ...(params.location ? [foldLine(`LOCATION:${escapeIcs(params.location)}`)] : []),
-    ...(params.description ? [foldLine(`DESCRIPTION:${escapeIcs(params.description)}`)] : []),
-    "STATUS:CONFIRMED",
-    "TRANSP:OPAQUE",
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ];
-  const icsContent = lines.join("\r\n") + "\r\n";
-  return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-}
-
-/** Opens the .ics via a data URI anchor click — no download attribute so the OS routes it to the calendar app. */
-function openIcsDataUri(icsString: string): void {
-  const a = document.createElement('a');
-  a.href = 'data:text/calendar;charset=utf8,' + encodeURIComponent(icsString);
-  // Do NOT set a.download
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  sessionId: number;
+}): string {
+  if (isAndroid()) {
+    return buildAndroidIntentUrl(params);
+  }
+  return `/api/tableside/${params.sessionId}.ics`;
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -176,9 +87,6 @@ export default function Tableside() {
   const year = now.getFullYear();
 
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
-
-  // Track which session card has its calendar options expanded (null = none)
-  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -249,7 +157,14 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
-          const isExpanded = expandedId === session.id;
+          const calendarHref = buildCalendarHref({
+            title: session.title,
+            start,
+            end,
+            location: session.location,
+            description: session.description,
+            sessionId: session.id,
+          });
 
           return (
             <div
@@ -298,75 +213,17 @@ export default function Tableside() {
                 </div>
 
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
-                {!isExpanded ? (
-                  <button
-                    onClick={() => setExpandedId(session.id)}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                    style={{
-                      background: accent.gradient,
-                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                    }}
-                  >
-                    <CalendarPlus className="h-4 w-4" />
-                    Add to My Calendar
-                  </button>
-                ) : (
-                  <div className="mt-4 space-y-2">
-                    {/* Android: intent:// URI — OS routes directly to Samsung/Google Calendar event-save screen */}
-                    {/* Non-Android: Google Calendar URL in same tab */}
-                    {isAndroid() ? (
-                      <a
-                        href={buildAndroidIntentUrl({
-                          title: session.title,
-                          start,
-                          end,
-                          location: session.location,
-                          description: session.description,
-                          sessionId: session.id,
-                        })}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                        style={{
-                          background: accent.gradient,
-                          boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                        }}
-                      >
-                        <CalendarPlus className="h-4 w-4" />
-                        Add to Calendar
-                      </a>
-                    ) : (
-                      <a
-                        href={buildGCalUrl({ title: session.title, start, end, location: session.location })}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                        style={{
-                          background: accent.gradient,
-                          boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                        }}
-                      >
-                        <CalendarPlus className="h-4 w-4" />
-                        Google Calendar
-                      </a>
-                    )}
-
-                    {/* Apple / Outlook — plain server link, no JS, iOS Safari intercepts inline .ics */}
-                    <a
-                      href={`/api/tableside/${session.id}.ics`}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95 hover:bg-slate-100"
-                    >
-                      <CalendarPlus className="h-4 w-4" />
-                      Apple / Outlook Calendar
-                    </a>
-
-                    {/* Cancel */}
-                    <button
-                      onClick={() => setExpandedId(null)}
-                      className="w-full py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
+                <a
+                  href={calendarHref}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                  style={{
+                    background: accent.gradient,
+                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                  }}
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Add to My Calendar
+                </a>
               </div>
             </div>
           );

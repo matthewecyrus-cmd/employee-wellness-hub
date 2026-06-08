@@ -20,7 +20,7 @@
 ## Phase 3: Tableside Activity Page
 - [x] List up to 4 session cards per month
 - [x] Each card shows title, location, day/time
-- [x] "Add to Calendar" button hits /api/calendar/:sessionId endpoint
+- [x] "Add to Calendar" button uses Android native calendar intent or inline .ics endpoint
 - [x] Correct MIME type ensures native iOS/Android calendar prompt
 
 ## Phase 4: Admin Interface
@@ -53,7 +53,7 @@
 
 ## Calendar & Feature Improvements
 
-- [x] Fix mobile calendar: iOS gets inline .ics (native calendar sheet), Android gets Google Calendar redirect
+- [x] Fix mobile calendar: iOS gets inline .ics, Android gets native calendar insert intent
 - [x] Add Back to Hub button on Tableside page
 - [x] Add Lunch & Learn RSVP URL field in admin Settings panel
 - [x] Add Resources file/PDF upload support in admin panel (Upload PDF button in Content Manager)
