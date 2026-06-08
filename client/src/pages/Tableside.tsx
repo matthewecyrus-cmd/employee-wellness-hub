@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarPlus, Clock, MapPin, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 
 const MONTH_NAMES = [
@@ -21,12 +21,17 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+/** Detects iOS Safari — these devices handle .ics natively */
+function isIOS(): boolean {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 // Accent colors for each session card (cycles through 4)
 const SESSION_ACCENTS = [
-  { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)" },
-  { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)" },
-  { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)" },
-  { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)" },
+  { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)", solid: "#7C3AED" },
+  { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)", solid: "#0EA5E9" },
+  { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)", solid: "#10B981" },
+  { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)", solid: "#F59E0B" },
 ];
 
 export default function Tableside() {
@@ -37,9 +42,9 @@ export default function Tableside() {
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
 
   const handleAddToCalendar = (sessionId: number) => {
-    // Navigate to the .ics endpoint — the server responds with
-    // Content-Type: text/calendar which triggers the native calendar
-    // "Add" sheet on iOS and the Google Calendar save preview on Android.
+    // iOS Safari handles .ics natively — the server detects the UA and serves
+    // the file inline, which triggers the "Add to Calendar" sheet automatically.
+    // Android Chrome doesn't handle .ics — the server redirects to Google Calendar.
     window.location.href = `/api/calendar/${sessionId}`;
   };
 
@@ -87,8 +92,7 @@ export default function Tableside() {
       <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
           <span className="font-semibold">Pick a session that works for you</span> and tap
-          "Add to Calendar" — your phone opens the calendar save screen instantly. No
-          downloads, no extra steps.
+          the button to save it to your calendar — no downloads, no extra steps.
         </p>
       </div>
 
@@ -161,18 +165,37 @@ export default function Tableside() {
                   )}
                 </div>
 
-                {/* Add to Calendar CTA */}
-                <button
-                  onClick={() => handleAddToCalendar(session.id)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                  style={{
-                    background: accent.gradient,
-                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                  }}
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Add to My Calendar
-                </button>
+                {/* Calendar CTAs */}
+                <div className="mt-4 space-y-2">
+                  {/* Primary button — smart routing (iOS → .ics, Android → Google Cal) */}
+                  <button
+                    onClick={() => handleAddToCalendar(session.id)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Add to My Calendar
+                  </button>
+
+                  {/* Secondary: always-visible Google Calendar link */}
+                  <a
+                    href={`/api/calendar/${session.id}/gcal`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all duration-150 active:scale-95"
+                    style={{
+                      borderColor: `${accent.solid}40`,
+                      color: accent.solid,
+                      background: `${accent.solid}0d`,
+                    }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open in Google Calendar
+                  </a>
+                </div>
               </div>
             </div>
           );
@@ -181,7 +204,7 @@ export default function Tableside() {
         {/* Footer note */}
         {!isLoading && sessions.length > 0 && (
           <p className="pt-2 text-center text-xs text-slate-500">
-            Each button adds only that session to your calendar.
+            Each button saves only that session to your calendar.
           </p>
         )}
       </main>

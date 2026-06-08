@@ -50,3 +50,10 @@
 - [x] Update hub-employee.html with 4 session cards and individual calendar buttons
 - [x] Push updated HTML to GitHub Pages
 - [x] Save checkpoint
+
+## Calendar & Feature Improvements
+
+- [x] Fix mobile calendar: iOS gets inline .ics (native calendar sheet), Android gets Google Calendar redirect
+- [x] Add Back to Hub button on Tableside page
+- [x] Add Lunch & Learn RSVP URL field in admin Settings panel
+- [x] Add Resources file/PDF upload support in admin panel (Upload PDF button in Content Manager)

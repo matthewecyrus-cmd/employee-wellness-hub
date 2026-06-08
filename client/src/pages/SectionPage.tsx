@@ -52,6 +52,7 @@ export default function SectionPage({
   const contactName = settings["contact_name"] ?? "";
   const contactEmail = settings["contact_email"] ?? "";
   const contactPhone = settings["contact_phone"] ?? "";
+  const lunchLearnRsvpUrl = sectionKey === "lunch-learn" ? (settings["lunch_learn_rsvp_url"] ?? "") : "";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -152,13 +153,37 @@ export default function SectionPage({
                     style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
                   >
                     <ExternalLink className="h-4 w-4" />
-                    {item.contentType === "link" ? "Open Resource" : "Learn More"}
+                    {item.url.toLowerCase().includes(".pdf") || item.url.includes("tipsheet")
+                      ? "View / Download"
+                      : item.contentType === "link"
+                      ? "Open Resource"
+                      : "Learn More"}
                   </a>
                 )}
               </div>
             </div>
           );
         })}
+
+        {/* Lunch & Learn RSVP button — shown when admin has set the RSVP URL */}
+        {lunchLearnRsvpUrl && (
+          <div className="rounded-2xl overflow-hidden shadow-lg">
+            <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${color}, ${color}99)` }} />
+            <div className="bg-white p-4">
+              <p className="text-sm font-semibold text-slate-700 mb-3">Ready to join us? Save your spot.</p>
+              <a
+                href={lunchLearnRsvpUrl}
+                target={lunchLearnRsvpUrl.startsWith("mailto:") ? undefined : "_blank"}
+                rel="noopener noreferrer"
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
+              >
+                <ExternalLink className="h-4 w-4" />
+                RSVP for Lunch &amp; Learn
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Contact card */}
         {(contactName || contactEmail || contactPhone) && (

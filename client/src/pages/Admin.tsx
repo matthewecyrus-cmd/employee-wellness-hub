@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   Save,
   Settings,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { Link } from "wouter";
@@ -448,6 +449,7 @@ function SettingsManager() {
     { key: "month_headline", label: "Month Headline", placeholder: "What's Happening in June" },
     { key: "month_subheadline", label: "Subheadline / Theme Tags", placeholder: "Strength · Safety · Awareness" },
     { key: "month_theme_description", label: "Theme Description", placeholder: "Brief description of this month's focus...", multiline: true },
+    { key: "lunch_learn_rsvp_url", label: "Lunch & Learn RSVP Link", placeholder: "https://forms.office.com/... or mailto:..." },
     { key: "contact_name", label: "Contact Name", placeholder: "Matthew Cyrus" },
     { key: "contact_email", label: "Contact Email", placeholder: "name@company.com" },
     { key: "contact_phone", label: "Contact Phone", placeholder: "(469) 636-6066" },
@@ -614,6 +616,78 @@ function SectionsManager() {
   );
 }
 
+// ─── PDF Upload Button ───────────────────────────────────────────────────────
+
+function PdfUploadButton({ onUploaded }: { onUploaded: (url: string, fileName: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File too large — max 10 MB");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Strip the data URL prefix: "data:application/pdf;base64,"
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/upload/tipsheet", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type, dataBase64 }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error ?? "Upload failed");
+      }
+
+      const { url } = await res.json() as { url: string; key: string };
+      toast.success("File uploaded");
+      onUploaded(url, file.name);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={handleChange}
+      />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+      >
+        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        {uploading ? "Uploading..." : "Upload PDF"}
+      </button>
+    </>
+  );
+}
+
 // ─── Content Manager ──────────────────────────────────────────────────────────
 
 const SECTION_KEYS = [
@@ -669,13 +743,28 @@ function ContentManager() {
         ))}
       </select>
 
-      <button
-        onClick={() => setShowNewForm(true)}
-        className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700"
-      >
-        <Plus className="h-4 w-4" />
-        Add Content Block
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowNewForm(true)}
+          className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add Content Block
+        </button>
+        {selectedKey === "resources" && (
+          <PdfUploadButton
+            onUploaded={(url, fileName) => {
+              createMutation.mutate({
+                sectionKey: selectedKey,
+                contentType: "link",
+                title: fileName.replace(/\.pdf$/i, "").replace(/_/g, " "),
+                url,
+                sortOrder: contentItems.length,
+              });
+            }}
+          />
+        )}
+      </div>
 
       {/* New content form */}
       {showNewForm && (

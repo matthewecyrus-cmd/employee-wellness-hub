@@ -13,6 +13,14 @@ function toIcsDate(date: Date): string {
 }
 
 /**
+ * Formats a Date to Google Calendar's format: YYYYMMDDTHHmmssZ
+ * (same as ICS, Google accepts it)
+ */
+function toGCalDate(date: Date): string {
+  return toIcsDate(date);
+}
+
+/**
  * Escapes special characters in iCalendar text values.
  */
 function escapeIcs(text: string): string {
@@ -50,15 +58,44 @@ function generateUid(sessionId: number): string {
   return `tableside-session-${sessionId}@employee-wellness-hub`;
 }
 
+/**
+ * Builds a Google Calendar event creation URL.
+ * Works on Android Chrome and any browser where .ics won't auto-open.
+ */
+function buildGoogleCalendarUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string;
+  description?: string;
+}): string {
+  const base = "https://calendar.google.com/calendar/r/eventedit";
+  const p = new URLSearchParams({
+    text: params.title,
+    dates: `${toGCalDate(params.start)}/${toGCalDate(params.end)}`,
+    ...(params.location ? { location: params.location } : {}),
+    ...(params.description ? { details: params.description } : {}),
+  });
+  return `${base}?${p.toString()}`;
+}
+
+/**
+ * Detects if the User-Agent is iOS Safari (which handles .ics natively).
+ * Android Chrome and other browsers need the Google Calendar URL fallback.
+ */
+function isIOS(userAgent: string): boolean {
+  return /iphone|ipad|ipod/i.test(userAgent);
+}
+
 export function registerCalendarRoute(app: Express): void {
   /**
    * GET /api/calendar/:sessionId
    *
-   * Returns an .ics file with Content-Type: text/calendar so that:
-   * - iOS automatically surfaces the native Apple Calendar "Add" sheet
-   * - Android shows the Google Calendar save preview
-   *
-   * No extra steps required for the employee — the OS handles it.
+   * Strategy:
+   * - iOS Safari: serve the .ics with Content-Type: text/calendar (NO attachment
+   *   disposition). iOS intercepts it and shows the native "Add to Calendar" sheet.
+   * - Android / other: redirect to Google Calendar event creation URL.
+   *   This opens Google Calendar directly with the event pre-filled.
    */
   app.get("/api/calendar/:sessionId", async (req: Request, res: Response) => {
     const sessionId = parseInt(req.params.sessionId, 10);
@@ -75,10 +112,27 @@ export function registerCalendarRoute(app: Express): void {
       return;
     }
 
-    const now = new Date();
-    const dtStamp = toIcsDate(now);
-    const dtStart = toIcsDate(new Date(session.startTime));
-    const dtEnd = toIcsDate(new Date(session.endTime));
+    const ua = req.headers["user-agent"] ?? "";
+    const start = new Date(session.startTime);
+    const end = new Date(session.endTime);
+
+    // ── Android / non-iOS: redirect to Google Calendar ──────────────────────
+    if (!isIOS(ua)) {
+      const gcalUrl = buildGoogleCalendarUrl({
+        title: session.title,
+        start,
+        end,
+        location: session.location || undefined,
+        description: session.description || undefined,
+      });
+      res.redirect(302, gcalUrl);
+      return;
+    }
+
+    // ── iOS: serve .ics inline so Safari opens the native calendar sheet ────
+    const dtStamp = toIcsDate(new Date());
+    const dtStart = toIcsDate(start);
+    const dtEnd = toIcsDate(end);
     const uid = generateUid(session.id);
     const summary = escapeIcs(session.title);
     const location = escapeIcs(session.location || "");
@@ -106,14 +160,46 @@ export function registerCalendarRoute(app: Express): void {
 
     const icsContent = lines.join("\r\n");
 
-    // The critical header: text/calendar tells iOS/Android to hand the file
-    // directly to the calendar app instead of downloading it as a generic file.
+    // NO "attachment" disposition — inline lets iOS Safari intercept and open
+    // the native "Add to Calendar" sheet instead of downloading the file.
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="wellness-reminder-${session.id}.ics"`
+      `inline; filename="wellness-reminder-${session.id}.ics"`
     );
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.status(200).send(icsContent);
+  });
+
+  /**
+   * GET /api/calendar/:sessionId/gcal
+   *
+   * Direct Google Calendar URL — used as explicit fallback link in the UI
+   * for users who prefer Google Calendar regardless of device.
+   */
+  app.get("/api/calendar/:sessionId/gcal", async (req: Request, res: Response) => {
+    const sessionId = parseInt(req.params.sessionId, 10);
+
+    if (isNaN(sessionId)) {
+      res.status(400).send("Invalid session ID");
+      return;
+    }
+
+    const session = await getTablesideSessionById(sessionId);
+
+    if (!session) {
+      res.status(404).send("Session not found");
+      return;
+    }
+
+    const gcalUrl = buildGoogleCalendarUrl({
+      title: session.title,
+      start: new Date(session.startTime),
+      end: new Date(session.endTime),
+      location: session.location || undefined,
+      description: session.description || undefined,
+    });
+
+    res.redirect(302, gcalUrl);
   });
 }
