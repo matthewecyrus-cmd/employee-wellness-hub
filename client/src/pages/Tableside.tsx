@@ -10,6 +10,8 @@ function buildAndroidIntentUrl(params: {
   description?: string | null;
   sessionId: number;
 }): string {
+  const startMs = params.start.getTime();
+  const endMs = params.end.getTime();
   const parts = [
     "intent://insert#Intent",
     "action=android.intent.action.INSERT",
@@ -17,9 +19,11 @@ function buildAndroidIntentUrl(params: {
     `S.title=${encodeURIComponent(params.title)}`,
     params.location ? `S.eventLocation=${encodeURIComponent(params.location)}` : null,
     params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
-    `l.beginTime=${params.start.getTime()}`,
-    `l.endTime=${params.end.getTime()}`,
-    "package=com.samsung.android.calendar",
+    // Use both S. (string) and l. (long) prefixes for maximum Samsung Calendar compatibility
+    `S.beginTime=${startMs}`,
+    `S.endTime=${endMs}`,
+    `l.beginTime=${startMs}`,
+    `l.endTime=${endMs}`,
     "end",
   ].filter(Boolean).join(";");
   return parts;
