@@ -93,14 +93,14 @@ export function registerCalendarRoute(app: Express): void {
     const sessionId = parseInt(req.params.id ?? req.params.sessionId, 10);
 
     if (isNaN(sessionId)) {
-      res.status(400).send("Invalid session ID");
+      res.status(400).setHeader("Content-Type", "text/plain; charset=utf-8").send("Invalid session ID");
       return;
     }
 
     const session = await getTablesideSessionById(sessionId);
 
     if (!session) {
-      res.status(404).send("Session not found");
+      res.status(404).setHeader("Content-Type", "text/plain; charset=utf-8").send("Session not found");
       return;
     }
 
@@ -116,20 +116,28 @@ export function registerCalendarRoute(app: Express): void {
       description: session.description || undefined,
     });
 
+    // Set proper headers for calendar file delivery
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Length", Buffer.byteLength(icsContent, "utf-8"));
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    
     if (useFilename) {
-      res.setHeader("Content-Disposition", `inline; filename="tableside-session-${session.id}.ics"`);
+      const filename = `tableside-session-${session.id}.ics`;
+      res.setHeader("Content-Disposition", `inline; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     }
-    res.setHeader("Cache-Control", "no-store");
+    
     res.status(200).send(icsContent);
   }
 
   /**
    * GET /api/tableside/:id
    *
-   * Primary mobile endpoint. It intentionally has no .ics filename and no
+   * Primary mobile endpoint. It intentionally has no .ics filename and minimal
    * Content-Disposition header so mobile browsers are less likely to treat the
-   * response as a downloaded file.
+   * response as a downloaded file. iOS Safari will intercept this and show the
+   * native "Add to Calendar" sheet.
    */
   app.get("/api/tableside/:id", async (req: Request, res: Response) => {
     await sendTablesideCalendar(req, res, false);
@@ -140,7 +148,7 @@ export function registerCalendarRoute(app: Express): void {
    *
    * Plain server endpoint for the Apple / Outlook Calendar <a> link.
    * Returns the ICS with Content-Disposition: inline so iOS Safari intercepts
-   * it and shows the native "Add to Calendar" sheet without any JS tricks.
+   * it and shows the native "Add to Calendar" sheet without any JavaScript tricks.
    */
   app.get("/api/tableside/:id.ics", async (req: Request, res: Response) => {
     await sendTablesideCalendar(req, res, true);
