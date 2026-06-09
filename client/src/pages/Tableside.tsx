@@ -22,27 +22,42 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-/** Format a Date as YYYYMMDDTHHmmssZ for Google Calendar dates= param */
-function toGCalDate(d: Date): string {
-  return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-}
-
-/** Build Google Calendar add-event URL */
-function buildGCalUrl(params: {
+/**
+ * Builds an Android intent:// URI using ACTION_INSERT.
+ * Chrome passes this to the OS intent resolver, which opens the native
+ * calendar app (Samsung Calendar, Google Calendar, etc.) with the event
+ * pre-filled. Falls back to the inline .ics endpoint if no app handles it.
+ */
+function buildAndroidIntentUrl(params: {
   title: string;
   start: Date;
   end: Date;
   location?: string | null;
   description?: string | null;
+  sessionId: number;
 }): string {
-  const p = new URLSearchParams({
-    action: "TEMPLATE",
-    text: params.title,
-    dates: `${toGCalDate(params.start)}/${toGCalDate(params.end)}`,
-  });
-  if (params.location) p.set("location", params.location);
-  if (params.description) p.set("details", params.description);
-  return `https://calendar.google.com/calendar/render?${p.toString()}`;
+  const icsFallback = encodeURIComponent(
+    `${window.location.origin}/api/tableside/${params.sessionId}.ics`
+  );
+  const parts = [
+    "intent://com.android.calendar/events",
+    "#Intent",
+    "scheme=content",
+    "action=android.intent.action.INSERT",
+    "type=vnd.android.cursor.item/event",
+    `S.title=${encodeURIComponent(params.title)}`,
+    ...(params.location
+      ? [`S.eventLocation=${encodeURIComponent(params.location)}`]
+      : []),
+    ...(params.description
+      ? [`S.description=${encodeURIComponent(params.description)}`]
+      : []),
+    `l.beginTime=${params.start.getTime()}`,
+    `l.endTime=${params.end.getTime()}`,
+    `S.browser_fallback_url=${icsFallback}`,
+    "end",
+  ];
+  return parts.join(";");
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -133,14 +148,19 @@ export default function Tableside() {
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
           const isExpanded = expandedId === session.id;
-          const gcalUrl = buildGCalUrl({
+
+          // Android intent:// URI — ACTION_INSERT opens native calendar event-save screen
+          const androidHref = buildAndroidIntentUrl({
             title: session.title,
             start,
             end,
             location: session.location,
             description: session.description,
+            sessionId: session.id,
           });
-          const icsUrl = `/api/tableside/${session.id}.ics`;
+
+          // iPhone / Outlook / Samsung import — inline .ics served by the server
+          const icsHref = `/api/tableside/${session.id}.ics`;
 
           return (
             <div
@@ -203,20 +223,18 @@ export default function Tableside() {
                   </button>
                 ) : (
                   <div className="mt-4 space-y-2">
-                    {/* Android / Google Calendar */}
+                    {/* Android — native calendar intent, no Google Calendar */}
                     <a
-                      href={gcalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 transition-all duration-150 active:scale-95"
+                      href={androidHref}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-bold text-green-800 transition-all duration-150 active:scale-95"
                     >
                       <CalendarPlus className="h-4 w-4" />
-                      Google Calendar
+                      Android Calendar
                     </a>
 
-                    {/* iPhone / Outlook / Samsung — inline .ics */}
+                    {/* iPhone / Outlook / Samsung import */}
                     <a
-                      href={icsUrl}
+                      href={icsHref}
                       className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95"
                     >
                       <CalendarPlus className="h-4 w-4" />
