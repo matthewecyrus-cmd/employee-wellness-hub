@@ -18,9 +18,12 @@ import {
   upsertHubSetting,
   upsertUser,
   getUserByOpenId,
+  getAdminPassword,
 } from "./db";
-import { COOKIE_NAME } from "@shared/const";
+import { sdk } from "./_core/sdk";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { COOKIE_NAME } from "@shared/const";
+
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
@@ -37,6 +40,48 @@ export const appRouter = router({
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+
+    // Standalone admin password login — no Manus OAuth required
+    adminLogin: publicProcedure
+      .input(z.object({ password: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        const storedPassword = await getAdminPassword();
+        if (!storedPassword || input.password !== storedPassword) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password" });
+        }
+        // Ensure the owner admin user exists in the DB
+        const ADMIN_OPEN_ID = "local_admin";
+        let user = await getUserByOpenId(ADMIN_OPEN_ID);
+        if (!user) {
+          await upsertUser({
+            openId: ADMIN_OPEN_ID,
+            name: "Admin",
+            email: null,
+            loginMethod: "password",
+            role: "admin",
+            lastSignedIn: new Date(),
+          });
+          user = await getUserByOpenId(ADMIN_OPEN_ID);
+        }
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create admin session" });
+        // Ensure role is admin (in case it was downgraded)
+        if (user.role !== "admin") {
+          await upsertUser({ openId: ADMIN_OPEN_ID, role: "admin", lastSignedIn: new Date() });
+        }
+        const token = await sdk.createSessionToken(ADMIN_OPEN_ID, { name: "Admin" });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+        return { success: true } as const;
+      }),
+
+    // Change admin password (requires being logged in as admin)
+    adminChangePassword: adminProcedure
+      .input(z.object({ newPassword: z.string().min(6) }))
+      .mutation(async ({ input }) => {
+        await upsertHubSetting("admin_password", input.newPassword);
+        return { success: true } as const;
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

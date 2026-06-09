@@ -5,20 +5,17 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
+  // Unauthorized errors on admin routes are handled by the Admin page itself.
+  // Do not redirect to Manus OAuth — the app uses standalone password login.
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
-
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
+  // Suppress console noise for expected auth failures
+  if (error.message === UNAUTHED_ERR_MSG) return;
 };
 
 queryClient.getQueryCache().subscribe(event => {

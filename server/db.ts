@@ -192,6 +192,13 @@ export async function getHubSettings(): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((r: HubSetting) => [r.settingKey, r.settingValue]));
 }
 
+export async function getAdminPassword(): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(hubSettings).where(eq(hubSettings.settingKey, 'admin_password'));
+  return rows[0]?.settingValue ?? null;
+}
+
 export async function upsertHubSetting(key: string, value: string): Promise<void> {
   const db = await getDb();
   if (!db) return;

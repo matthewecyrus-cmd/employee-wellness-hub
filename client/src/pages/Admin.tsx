@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import {
@@ -64,6 +63,63 @@ function toTimeStr(d: Date): string {
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 
+// ─── Password Login Form ──────────────────────────────────────────────────────
+
+function AdminLoginForm() {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const utils = trpc.useUtils();
+  const loginMutation = trpc.auth.adminLogin.useMutation({
+    onSuccess: () => {
+      utils.auth.me.invalidate();
+    },
+    onError: (e) => setError(e.message),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    loginMutation.mutate({ password });
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-600">
+            <Settings className="h-7 w-7 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Admin Panel</h1>
+          <p className="text-sm text-slate-400">Enter your password to continue</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            className="w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
+          />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={loginMutation.isPending || !password}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60 active:scale-[0.97] transition-transform"
+          >
+            {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
+          </button>
+        </form>
+        <Link href="/">
+          <button className="mt-4 w-full rounded-xl bg-slate-800 py-3 text-sm text-slate-400 hover:text-white transition-colors">
+            Back to Hub
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user, loading, isAuthenticated } = useAuth();
 
@@ -75,37 +131,8 @@ export default function Admin() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 px-6 text-center">
-        <Settings className="h-12 w-12 text-slate-600" />
-        <h1 className="text-xl font-bold text-white">Admin Access Required</h1>
-        <p className="text-sm text-slate-400">Please sign in to manage the wellness hub.</p>
-        <a
-          href={getLoginUrl()}
-          className="rounded-xl bg-purple-600 px-6 py-3 text-sm font-bold text-white hover:bg-purple-700"
-        >
-          Sign In
-        </a>
-      </div>
-    );
-  }
-
-  if (user?.role !== "admin") {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 px-6 text-center">
-        <Settings className="h-12 w-12 text-slate-600" />
-        <h1 className="text-xl font-bold text-white">Access Denied</h1>
-        <p className="text-sm text-slate-400">
-          Your account does not have admin privileges. Contact the hub owner.
-        </p>
-        <Link href="/">
-          <button className="rounded-xl bg-slate-700 px-6 py-3 text-sm font-bold text-white">
-            Back to Hub
-          </button>
-        </Link>
-      </div>
-    );
+  if (!isAuthenticated || user?.role !== "admin") {
+    return <AdminLoginForm />;
   }
 
   return <AdminDashboard />;
@@ -508,6 +535,64 @@ function SettingsManager() {
           </button>
         </div>
       )}
+
+      {/* Change Admin Password */}
+      <ChangePasswordSection />
+    </div>
+  );
+}
+
+// ─── Change Password Section ─────────────────────────────────────────────────
+
+function ChangePasswordSection() {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const changePw = trpc.auth.adminChangePassword.useMutation({
+    onSuccess: () => {
+      toast.success("Password updated");
+      setNewPassword("");
+      setConfirm("");
+      setError("");
+    },
+    onError: (e) => setError(e.message),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirm) { setError("Passwords do not match"); return; }
+    if (newPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setError("");
+    changePw.mutate({ newPassword });
+  };
+
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
+      <h3 className="mb-3 text-sm font-bold text-white">Change Admin Password</h3>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="password"
+          placeholder="New password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
+        />
+        <input
+          type="password"
+          placeholder="Confirm new password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
+        />
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <button
+          type="submit"
+          disabled={changePw.isPending || !newPassword || !confirm}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-700 py-2.5 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-60"
+        >
+          {changePw.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Password"}
+        </button>
+      </form>
     </div>
   );
 }
