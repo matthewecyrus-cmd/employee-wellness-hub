@@ -342,9 +342,11 @@ export default function Tableside() {
 
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
                 {isAndroid() ? (
-                  /* Android: plain <a href> with no onClick so the intent fires natively */
+                  /* Android: plain <a href> with intent:// URL */
                   <a
-                    href={calendarHref}
+                    href={`${calendarHref}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                     style={{
                       background: accent.gradient,
@@ -352,12 +354,12 @@ export default function Tableside() {
                     }}
                   >
                     <CalendarPlus className="h-4 w-4" />
-                    Add to My Calendar
+                    Android Calendar
                   </a>
                 ) : (
-                  /* iOS / Other: server-side ICS with optional Web Share API */
+                  /* iOS / Other: server-side ICS */
                   <a
-                    href={calendarHref}
+                    href={`/api/tableside/${session.id}.ics`}
                     onClick={handleCalendarClick}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                     style={{
@@ -366,7 +368,7 @@ export default function Tableside() {
                     }}
                   >
                     <CalendarPlus className="h-4 w-4" />
-                    Add to My Calendar
+                    iPhone Calendar
                   </a>
                 )}
               </div>
