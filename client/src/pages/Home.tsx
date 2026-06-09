@@ -11,9 +11,9 @@ import {
   Circle,
   Phone,
   Mail,
-  Settings2,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useRef, useState } from "react";
 
 // Map icon string keys from the DB to Lucide components
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -26,6 +26,35 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "megaphone": Megaphone,
   "circle": Circle,
 };
+
+function AdminDot() {
+  const [count, setCount] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, navigate] = useLocation();
+
+  function handleTap() {
+    const next = count + 1;
+    setCount(next);
+    if (timer.current) clearTimeout(timer.current);
+    if (next >= 5) {
+      setCount(0);
+      navigate("/admin");
+      return;
+    }
+    // Reset count if no tap within 2s
+    timer.current = setTimeout(() => setCount(0), 2000);
+  }
+
+  return (
+    <div className="mt-5 flex justify-center">
+      <button
+        onClick={handleTap}
+        aria-label=""
+        className="h-2 w-2 rounded-full bg-slate-600 transition-colors duration-150 active:bg-slate-400"
+      />
+    </div>
+  );
+}
 
 export default function Home() {
   const { data: sections = [] } = trpc.sections.list.useQuery();
@@ -162,17 +191,8 @@ export default function Home() {
             </div>
           </>
         )}
-        {/* Discreet admin entry — inconspicuous gear icon */}
-        <div className="mt-4 flex justify-center">
-          <Link href="/admin">
-            <button
-              aria-label="Admin"
-              className="rounded-full p-2 text-slate-700 transition-colors duration-150 hover:text-slate-500 active:text-slate-400"
-            >
-              <Settings2 className="h-4 w-4" />
-            </button>
-          </Link>
-        </div>
+        {/* Discreet admin entry — tap 5× to open admin */}
+        <AdminDot />
       </footer>
     </div>
   );
