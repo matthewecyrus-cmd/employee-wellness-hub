@@ -1,6 +1,5 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
-import { useState } from "react";
 import { Link } from "wouter";
 
 const MONTH_NAMES = [
@@ -22,38 +21,86 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-/**
- * Builds an Android intent:// URI using ACTION_INSERT.
- * Uses vnd.android.cursor.dir/event — the correct MIME type for calendar insert
- * on Samsung Calendar, AOSP Calendar, and other Android calendar apps.
- */
-function buildAndroidIntentUrl(params: {
-  title: string;
-  start: Date;
-  end: Date;
-  location?: string | null;
-  description?: string | null;
-  sessionId: number;
-}): string {
-  const parts = [
-    "intent://#Intent",
-    "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.dir/event",
-    `S.title=${encodeURIComponent(params.title)}`,
-    ...(params.description
-      ? [`S.description=${encodeURIComponent(params.description)}`]
-      : []),
-    ...(params.location
-      ? [`S.eventLocation=${encodeURIComponent(params.location)}`]
-      : []),
-    `l.beginTime=${params.start.getTime()}`,
-    `l.endTime=${params.end.getTime()}`,
-    "end",
-  ];
-  return parts.join(";");
+// ── Calendar helpers (ported from pasted_content.txt) ──────────────────────
+
+function fmtICS(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-// Accent colors for each session card (cycles through 4)
+function buildICS(start: Date, end: Date, title: string, location: string, description: string): string {
+  const dtStart = fmtICS(start);
+  const dtEnd   = fmtICS(end);
+  const uid     = dtStart + "-tableside@wellnesshub";
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//WellnessHub//Tableside//EN",
+    "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+    "UID:" + uid,
+    "DTSTAMP:" + fmtICS(new Date()),
+    "DTSTART:" + dtStart,
+    "DTEND:" + dtEnd,
+    "SUMMARY:" + title,
+    "LOCATION:" + location,
+    "DESCRIPTION:" + description.replace(/\n/g, "\\n"),
+    "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "TRIGGER:-PT15M", "END:VALARM",
+    "END:VEVENT", "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+function icsDataUri(ics: string): string {
+  return "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+}
+
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as { MSStream?: unknown }).MSStream;
+}
+
+function isAndroid(): boolean {
+  return /Android/i.test(navigator.userAgent);
+}
+
+function addToCalendar(start: Date, end: Date, title: string, location: string, description: string): void {
+  const ics    = buildICS(start, end, title, location, description);
+  const icsUri = icsDataUri(ics);
+
+  if (isAndroid()) {
+    // Android Intent → opens native Calendar "New Event" screen, prefilled.
+    const startMs  = start.getTime();
+    const endMs    = end.getTime();
+    const fallback = encodeURIComponent(icsUri);
+    const intentUrl =
+      "intent:#Intent;" +
+      "action=android.intent.action.INSERT;" +
+      "type=vnd.android.cursor.item/event;" +
+      "S.title=" + encodeURIComponent(title) + ";" +
+      "S.eventLocation=" + encodeURIComponent(location) + ";" +
+      "S.description=" + encodeURIComponent(description) + ";" +
+      "l.beginTime=" + startMs + ";" +
+      "l.endTime=" + endMs + ";" +
+      "S.browser_fallback_url=" + fallback + ";" +
+      "end";
+    window.location.href = intentUrl;
+    return;
+  }
+
+  if (isIOS()) {
+    // iOS Safari opens the native Calendar add-event sheet from a .ics data URI.
+    window.location.href = icsUri;
+    return;
+  }
+
+  // Desktop / unknown → download .ics, opens in default calendar app.
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = "tableside-activity.ics";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Accent colors ──────────────────────────────────────────────────────────
 const SESSION_ACCENTS = [
   { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)" },
   { gradient: "linear-gradient(90deg, #0EA5E9, #38BDF8)", glow: "rgba(14,165,233,0.45)" },
@@ -62,14 +109,11 @@ const SESSION_ACCENTS = [
 ];
 
 export default function Tableside() {
-  const now = new Date();
+  const now   = new Date();
   const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const year  = now.getFullYear();
 
   const { data: sessions = [], isLoading } = trpc.tableside.list.useQuery({ month, year });
-
-  // Track which session card is expanded to show calendar options
-  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -115,7 +159,7 @@ export default function Tableside() {
       <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
           <span className="font-semibold">Pick a session that works for you</span> and tap
-          "Add to My Calendar" — choose your calendar app to save it instantly.
+          "Add to My Calendar" — your phone will open the calendar save screen instantly.
         </p>
       </div>
 
@@ -137,23 +181,12 @@ export default function Tableside() {
         )}
 
         {sessions.map((session, i) => {
-          const start = new Date(session.startTime);
-          const end = new Date(session.endTime);
+          const start  = new Date(session.startTime);
+          const end    = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
-          const isExpanded = expandedId === session.id;
-
-          // Android intent:// URI — ACTION_INSERT opens native calendar event-save screen
-          const androidHref = buildAndroidIntentUrl({
-            title: session.title,
-            start,
-            end,
-            location: session.location,
-            description: session.description,
-            sessionId: session.id,
-          });
-
-          // iPhone / Outlook / Samsung import — inline .ics served by the server
-          const icsHref = `/api/tableside/${session.id}.ics`;
+          const title       = session.title;
+          const location    = session.location ?? "";
+          const description = session.description ?? "Wellness tableside activity.";
 
           return (
             <div
@@ -181,7 +214,7 @@ export default function Tableside() {
                   className="font-display text-base font-bold leading-snug text-slate-900"
                   style={{ fontFamily: "Poppins, Inter, sans-serif" }}
                 >
-                  {session.title}
+                  {title}
                 </h2>
 
                 <div className="mt-3 space-y-2">
@@ -193,56 +226,26 @@ export default function Tableside() {
                     </div>
                   </div>
 
-                  {session.location && (
+                  {location && (
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <MapPin className="h-4 w-4 shrink-0 text-purple-600" />
-                      <span className="font-medium">{session.location}</span>
+                      <span className="font-medium">{location}</span>
                     </div>
                   )}
                 </div>
 
-                {/* ── Calendar CTA ──────────────────────────────────────── */}
-                {!isExpanded ? (
-                  <button
-                    onClick={() => setExpandedId(session.id)}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                    style={{
-                      background: accent.gradient,
-                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                    }}
-                  >
-                    <CalendarPlus className="h-4 w-4" />
-                    Add to My Calendar
-                  </button>
-                ) : (
-                  <div className="mt-4 space-y-2">
-                    {/* Android — native calendar intent, no Google Calendar */}
-                    <a
-                      href={androidHref}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-green-500 bg-green-50 px-4 py-3 text-sm font-bold text-green-800 transition-all duration-150 active:scale-95"
-                    >
-                      <CalendarPlus className="h-4 w-4" />
-                      Android Calendar
-                    </a>
-
-                    {/* iPhone / Outlook / Samsung import */}
-                    <a
-                      href={icsHref}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition-all duration-150 active:scale-95"
-                    >
-                      <CalendarPlus className="h-4 w-4" />
-                      iPhone / Outlook / Other
-                    </a>
-
-                    {/* Cancel */}
-                    <button
-                      onClick={() => setExpandedId(null)}
-                      className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
+                {/* ── Single calendar button — platform-aware via JS ─────── */}
+                <button
+                  onClick={() => addToCalendar(start, end, title, location, description)}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                  style={{
+                    background: accent.gradient,
+                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                  }}
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Add to My Calendar
+                </button>
               </div>
             </div>
           );
