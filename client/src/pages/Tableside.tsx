@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin, Smartphone, Apple } from "lucide-react";
 import { Link } from "wouter";
+import { useRef } from "react";
 
 function buildGoogleCalendarUrl(
   title: string,
@@ -72,14 +73,46 @@ function CalendarButtons({ session, accent }: CalendarButtonsProps) {
     start,
     end
   );
+  const icsUrl = `/api/tableside/${session.id}.ics`;
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleAndroidClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    // Open Google Calendar in a new tab — if the app is installed Chrome hands off to it
+    const gcalWindow = window.open(googleUrl, "_blank");
+    // If the page stays visible after 1.8s the app didn't open → fall back to ICS download
+    fallbackTimer.current = setTimeout(() => {
+      // Check if the gcal tab is still loading (app not installed)
+      try {
+        if (!gcalWindow || gcalWindow.closed) return; // app opened and tab closed itself
+      } catch {
+        return;
+      }
+      // Trigger ICS download as fallback
+      const a = document.createElement("a");
+      a.href = icsUrl;
+      a.download = "wellness-session.ics";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }, 1800);
+
+    // Cancel fallback if user navigates away (app opened)
+    const cancel = () => {
+      if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("visibilitychange", cancel);
+    };
+    window.addEventListener("blur", cancel, { once: true });
+    window.addEventListener("visibilitychange", cancel, { once: true });
+  }
 
   return (
     <div className="mt-4 flex gap-2">
-      {/* Android → Google Calendar (opens in browser, user taps Save) */}
+      {/* Android → Google Calendar with ICS fallback */}
       <a
         href={googleUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        onClick={handleAndroidClick}
         className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-bold text-white shadow-md transition-all duration-150 active:scale-95"
         style={{
           background: "linear-gradient(90deg, #22C55E, #16A34A)",
@@ -92,7 +125,7 @@ function CalendarButtons({ session, accent }: CalendarButtonsProps) {
 
       {/* iPhone / Outlook → ICS file */}
       <a
-        href={`/api/tableside/${session.id}.ics`}
+        href={icsUrl}
         className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-bold text-white shadow-md transition-all duration-150 active:scale-95"
         style={{
           background: accent.gradient,
