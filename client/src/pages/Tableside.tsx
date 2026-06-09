@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
-import type { MouseEvent } from "react";
+import { useEffect, type MouseEvent } from "react";
 import { Link } from "wouter";
 
 const MONTH_NAMES = [
@@ -129,6 +129,19 @@ const SESSION_ACCENTS = [
 ];
 
 export default function Tableside() {
+  // Eruda mobile dev console — remove after debugging
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/eruda";
+    script.onload = () => {
+      (window as unknown as Record<string, { init: () => void }>)["eruda"].init();
+    };
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
