@@ -88,6 +88,35 @@ function buildCalendarHref(params: CalendarButtonParams, option: CalendarOption)
     : buildIcsHref(params.sessionId);
 }
 
+/**
+ * Fires the Android calendar insert intent via window.location.href.
+ * Uses intent://#Intent format (no scheme=content, no host) which is the
+ * format that works across Samsung Calendar, AOSP Calendar, and Google Calendar.
+ * Shows a WebView warning if the intent fails after 1.5s.
+ */
+function triggerAndroidCalendar(params: CalendarButtonParams): void {
+  const intentUrl =
+    "intent://#Intent;" +
+    "action=android.intent.action.INSERT;" +
+    "type=vnd.android.cursor.dir/event;" +
+    "S.title=" + androidIntentValue(params.title) + ";" +
+    (params.description ? "S.description=" + androidIntentValue(params.description) + ";" : "") +
+    (params.location ? "S.eventLocation=" + androidIntentValue(params.location) + ";" : "") +
+    "l.beginTime=" + params.start.getTime() + ";" +
+    "l.endTime=" + params.end.getTime() + ";" +
+    "end";
+
+  window.location.href = intentUrl;
+
+  // If stuck in a QR scanner WebView the intent will fail silently.
+  // After 1.5s, if the user is still on the page, prompt them to open in Chrome.
+  setTimeout(() => {
+    alert(
+      "Your QR scanner is blocking the calendar app. Please tap the three dots in the top right corner, select 'Open in Chrome' or 'Open in Browser', and tap the button again."
+    );
+  }, 1500);
+}
+
 // Accent colors for each session card (cycles through 4)
 const SESSION_ACCENTS = [
   { gradient: "linear-gradient(90deg, #7C3AED, #9F67FF)", glow: "rgba(124,58,237,0.45)" },
@@ -103,17 +132,31 @@ function CalendarButtons({
 }) {
   const googleHref = buildCalendarHref(params, "google");
   const otherHref = buildCalendarHref(params, "other");
+  const android = isAndroid();
 
   return (
     <div className="mt-4 space-y-2">
-      <a
-        href={googleHref}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all duration-150 active:scale-95"
-      >
-        <CalendarPlus className="h-4 w-4" />
-        Google Calendar
-      </a>
+      {/* Google Calendar — anchor for non-Android, button+intent for Android */}
+      {android ? (
+        <button
+          type="button"
+          onClick={() => triggerAndroidCalendar(params)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-green-600 bg-green-50 px-4 py-3 text-sm font-bold text-green-700 shadow-sm transition-all duration-150 active:scale-95"
+        >
+          <CalendarPlus className="h-4 w-4" />
+          Android Calendar
+        </button>
+      ) : (
+        <a
+          href={googleHref}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all duration-150 active:scale-95"
+        >
+          <CalendarPlus className="h-4 w-4" />
+          Google Calendar
+        </a>
+      )}
 
+      {/* iPhone / Outlook / Other — always an anchor to the .ics endpoint */}
       <a
         href={otherHref}
         className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all duration-150 active:scale-95"
