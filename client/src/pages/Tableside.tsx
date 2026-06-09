@@ -1,23 +1,11 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
-import { useMemo } from "react";
 import { Link } from "wouter";
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-
-type CalendarButtonParams = {
-  sessionId: number;
-  title: string;
-  start: Date;
-  end: Date;
-  location?: string | null;
-  description?: string | null;
-};
-
-type CalendarOption = "google" | "other";
 
 function formatDay(date: Date): string {
   return date.toLocaleDateString("en-US", {
@@ -33,88 +21,56 @@ function formatTimeRange(start: Date, end: Date): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-function isAndroid(): boolean {
-  return /android/i.test(window.navigator.userAgent);
-}
-
-function buildGoogleCalendarHref(sessionId: number): string {
-  return `/api/calendar/${sessionId}/gcal`;
-}
-
-function buildIcsHref(sessionId: number): string {
-  return `/api/tableside/${sessionId}.ics`;
-}
-
-function androidIntentValue(value: string): string {
-  return encodeURIComponent(value).replace(/'/g, "%27");
-}
-
 /**
- * Native Android calendar insert intent.
- *
- * Do not add browser_fallback_url. Any browser fallback is what causes Chrome
- * to open Google Calendar in the browser. Do not point Android at .ics either;
- * Chrome treats .ics as a file download.
+ * Builds an Android intent:// URI using ACTION_INSERT so the OS opens the
+ * native calendar event-save screen directly on the first tap.
+ * Falls back to the inline .ics endpoint if no calendar app handles the intent.
  */
-function buildAndroidCalendarIntent(
-  params: CalendarButtonParams,
-  targetPackage?: "com.google.android.calendar",
-): string {
-  return [
-    "intent://com.android.calendar/events#Intent",
+function buildAndroidIntentUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+  sessionId: number;
+}): string {
+  const icsFallback = encodeURIComponent(
+    `${window.location.origin}/api/tableside/${params.sessionId}`
+  );
+  const parts = [
+    "intent://com.android.calendar/events",
+    "#Intent",
     "scheme=content",
     "action=android.intent.action.INSERT",
-    ...(targetPackage ? [`package=${targetPackage}`] : []),
     "type=vnd.android.cursor.item/event",
-    `S.title=${androidIntentValue(params.title)}`,
-    ...(params.location ? [`S.eventLocation=${androidIntentValue(params.location)}`] : []),
-    ...(params.description ? [`S.description=${androidIntentValue(params.description)}`] : []),
+    `S.title=${encodeURIComponent(params.title)}`,
+    ...(params.location ? [`S.eventLocation=${encodeURIComponent(params.location)}`] : []),
+    ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
     `l.beginTime=${params.start.getTime()}`,
     `l.endTime=${params.end.getTime()}`,
+    `S.browser_fallback_url=${icsFallback}`,
     "end",
-  ].join(";");
+  ];
+  return parts.join(";");
 }
 
-function buildCalendarHref(params: CalendarButtonParams, option: CalendarOption): string {
+/** Returns true when running on an Android browser. */
+function isAndroid(): boolean {
+  return /android/i.test(navigator.userAgent);
+}
+
+function buildCalendarHref(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+  sessionId: number;
+}): string {
   if (isAndroid()) {
-    return buildAndroidCalendarIntent(
-      params,
-      option === "google" ? "com.google.android.calendar" : undefined,
-    );
+    return buildAndroidIntentUrl(params);
   }
-
-  return option === "google"
-    ? buildGoogleCalendarHref(params.sessionId)
-    : buildIcsHref(params.sessionId);
-}
-
-/**
- * Fires the Android calendar insert intent via window.location.href.
- * Uses intent://#Intent format (no scheme=content, no host) which is the
- * format that works across Samsung Calendar, AOSP Calendar, and Google Calendar.
- * Shows a WebView warning if the intent fails after 1.5s.
- */
-function triggerAndroidCalendar(params: CalendarButtonParams): void {
-  const intentUrl =
-    "intent://#Intent;" +
-    "action=android.intent.action.INSERT;" +
-    "type=vnd.android.cursor.dir/event;" +
-    "S.title=" + androidIntentValue(params.title) + ";" +
-    (params.description ? "S.description=" + androidIntentValue(params.description) + ";" : "") +
-    (params.location ? "S.eventLocation=" + androidIntentValue(params.location) + ";" : "") +
-    "l.beginTime=" + params.start.getTime() + ";" +
-    "l.endTime=" + params.end.getTime() + ";" +
-    "end";
-
-  window.location.href = intentUrl;
-
-  // If stuck in a QR scanner WebView the intent will fail silently.
-  // After 1.5s, if the user is still on the page, prompt them to open in Chrome.
-  setTimeout(() => {
-    alert(
-      "Your QR scanner is blocking the calendar app. Please tap the three dots in the top right corner, select 'Open in Chrome' or 'Open in Browser', and tap the button again."
-    );
-  }, 1500);
+  return `/api/tableside/${params.sessionId}`;
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -125,51 +81,8 @@ const SESSION_ACCENTS = [
   { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)" },
 ];
 
-function CalendarButtons({
-  params,
-}: {
-  params: CalendarButtonParams;
-}) {
-  const googleHref = buildCalendarHref(params, "google");
-  const otherHref = buildCalendarHref(params, "other");
-  const android = isAndroid();
-
-  return (
-    <div className="mt-4 space-y-2">
-      {/* Google Calendar — anchor for non-Android, button+intent for Android */}
-      {android ? (
-        <button
-          type="button"
-          onClick={() => triggerAndroidCalendar(params)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-green-600 bg-green-50 px-4 py-3 text-sm font-bold text-green-700 shadow-sm transition-all duration-150 active:scale-95"
-        >
-          <CalendarPlus className="h-4 w-4" />
-          Android Calendar
-        </button>
-      ) : (
-        <a
-          href={googleHref}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all duration-150 active:scale-95"
-        >
-          <CalendarPlus className="h-4 w-4" />
-          Google Calendar
-        </a>
-      )}
-
-      {/* iPhone / Outlook / Other — always an anchor to the .ics endpoint */}
-      <a
-        href={otherHref}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all duration-150 active:scale-95"
-      >
-        <CalendarPlus className="h-4 w-4" />
-        iPhone / Outlook / Other
-      </a>
-    </div>
-  );
-}
-
 export default function Tableside() {
-  const now = useMemo(() => new Date(), []);
+  const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
@@ -218,7 +131,8 @@ export default function Tableside() {
       {/* ── Instruction Banner ────────────────────────────────────────────── */}
       <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
-          <span className="font-semibold">Pick a session that works for you</span> and choose the calendar option that matches your device or app.
+          <span className="font-semibold">Pick a session that works for you</span> and tap
+          "Add to My Calendar" — your phone will open the calendar save screen instantly.
         </p>
       </div>
 
@@ -243,14 +157,14 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
-          const calendarParams: CalendarButtonParams = {
-            sessionId: session.id,
+          const calendarHref = buildCalendarHref({
             title: session.title,
             start,
             end,
             location: session.location,
             description: session.description,
-          };
+            sessionId: session.id,
+          });
 
           return (
             <div
@@ -298,7 +212,18 @@ export default function Tableside() {
                   )}
                 </div>
 
-                <CalendarButtons params={calendarParams} />
+                {/* ── Calendar CTA ──────────────────────────────────────── */}
+                <a
+                  href={calendarHref}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                  style={{
+                    background: accent.gradient,
+                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                  }}
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Add to My Calendar
+                </a>
               </div>
             </div>
           );
