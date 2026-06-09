@@ -342,11 +342,9 @@ export default function Tableside() {
 
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
                 {isAndroid() ? (
-                  /* Android: plain <a href> with intent:// URL */
+                  /* Android: plain <a href> with intent:// URL — same-tab navigation required for Chrome to dispatch the intent */
                   <a
                     href={`${calendarHref}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                     style={{
                       background: accent.gradient,
