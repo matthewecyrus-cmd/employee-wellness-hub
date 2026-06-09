@@ -1,7 +1,20 @@
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+
+function isAndroid(): boolean {
+  const ua = navigator.userAgent;
+  // Normal Android UA
+  if (/android/i.test(ua)) return true;
+  // Desktop-mode Android: userAgentData.platform is not Windows/macOS/Linux on Android
+  const platform = (navigator as unknown as { userAgentData?: { platform?: string } })
+    .userAgentData?.platform?.toLowerCase() ?? "";
+  if (platform === "windows" || platform === "macos" || platform === "linux") return false;
+  // Touch device with no desktop platform signal = likely Android in desktop mode
+  if (navigator.maxTouchPoints > 0 && /linux|windows nt/i.test(ua)) return true;
+  return false;
+}
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
@@ -33,12 +46,15 @@ const SESSION_ACCENTS = [
 type Accent = { gradient: string; glow: string };
 
 function IcsButton({ sessionId, accent }: { sessionId: number; accent: Accent }) {
-  const [tapped, setTapped] = useState(false);
+  const [, navigate] = useLocation();
 
-  function handleClick() {
-    setTapped(true);
-    // Reset instruction after 8 seconds
-    setTimeout(() => setTapped(false), 8000);
+  function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (isAndroid()) {
+      // Navigate to the dedicated Android help page which auto-triggers download
+      e.preventDefault();
+      navigate(`/tableside/${sessionId}/android-calendar`);
+    }
+    // iPhone/desktop: let the href fire naturally — iOS shows native Add to Calendar prompt
   }
 
   return (
@@ -55,12 +71,6 @@ function IcsButton({ sessionId, accent }: { sessionId: number; accent: Accent })
         <CalendarPlus className="h-4 w-4" />
         Add to My Calendar
       </a>
-      {tapped && (
-        <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-300">
-          📲 <strong>Android:</strong> Tap <strong>"Open"</strong> in the download bar at the bottom of your screen to save the event to Samsung Calendar.<br />
-          🍎 <strong>iPhone:</strong> Tap <strong>"Add to Calendar"</strong> in the prompt that appears.
-        </div>
-      )}
     </div>
   );
 }
