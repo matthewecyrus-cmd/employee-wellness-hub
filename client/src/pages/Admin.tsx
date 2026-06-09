@@ -869,6 +869,9 @@ function ContentManager() {
               <option value="text">Text Block</option>
               <option value="link">Link / Resource</option>
               <option value="announcement">Announcement</option>
+              {selectedKey === "lunch-learn" && (
+                <option value="recording">Past Recording / Video</option>
+              )}
             </select>
             <input
               className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
@@ -883,10 +886,10 @@ function ContentManager() {
               value={newItem.body}
               onChange={(e) => setNewItem({ ...newItem, body: e.target.value })}
             />
-            {newItem.contentType === "link" && (
+            {(newItem.contentType === "link" || newItem.contentType === "recording") && (
               <input
                 className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
-                placeholder="https://..."
+                placeholder={newItem.contentType === "recording" ? "YouTube, Teams, or SharePoint link..." : "https://..."}
                 value={newItem.url}
                 onChange={(e) => setNewItem({ ...newItem, url: e.target.value })}
               />
