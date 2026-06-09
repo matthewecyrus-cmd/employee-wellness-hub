@@ -341,18 +341,34 @@ export default function Tableside() {
                 </div>
 
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
-                <a
-                  href={calendarHref}
-                  onClick={handleCalendarClick}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                  style={{
-                    background: accent.gradient,
-                    boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                  }}
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Add to My Calendar
-                </a>
+                {isAndroid() ? (
+                  /* Android: plain <a href> with no onClick so the intent fires natively */
+                  <a
+                    href={calendarHref}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Add to My Calendar
+                  </a>
+                ) : (
+                  /* iOS / Other: server-side ICS with optional Web Share API */
+                  <a
+                    href={calendarHref}
+                    onClick={handleCalendarClick}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Add to My Calendar
+                  </a>
+                )}
               </div>
             </div>
           );
