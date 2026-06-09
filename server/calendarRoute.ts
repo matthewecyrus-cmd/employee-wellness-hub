@@ -23,10 +23,52 @@ function escapeIcs(text: string): string {
     .replace(/\n/g, "\\n");
 }
 
-/**
- * Folds long iCalendar lines at 75 octets per RFC 5545.
- * Continuation lines start with a single space.
- */
+function isAndroidRequest(req: Request): boolean {
+  return /android/i.test(req.get("user-agent") || "");
+}
+
+function androidIntentValue(value: string): string {
+  return encodeURIComponent(value).replace(/'/g, "%27");
+}
+
+function buildAndroidCalendarIntentUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string;
+  description?: string;
+  targetPackage?: "com.google.android.calendar";
+}): string {
+  return [
+    "intent://com.android.calendar/events#Intent",
+    "scheme=content",
+    "action=android.intent.action.INSERT",
+    ...(params.targetPackage ? [`package=${params.targetPackage}`] : []),
+    "type=vnd.android.cursor.item/event",
+    `S.title=${androidIntentValue(params.title)}`,
+    ...(params.location ? [`S.eventLocation=${androidIntentValue(params.location)}`] : []),
+    ...(params.description ? [`S.description=${androidIntentValue(params.description)}`] : []),
+    `l.beginTime=${params.start.getTime()}`,
+    `l.endTime=${params.end.getTime()}`,
+    "end",
+  ].join(";");
+}
+
+function redirectAndroidToNativeCalendar(
+  res: Response,
+  params: {
+    title: string;
+    start: Date;
+    end: Date;
+    location?: string;
+    description?: string;
+    targetPackage?: "com.google.android.calendar";
+  },
+): void {
+  res.setHeader("Cache-Control", "no-store");
+  res.redirect(302, buildAndroidCalendarIntentUrl(params));
+}
+
 function foldLine(line: string): string {
   const MAX = 75;
   if (line.length <= MAX) return line;
@@ -46,7 +88,7 @@ function foldLine(line: string): string {
 
 /**
  * Builds a complete, RFC 5545-compliant iCalendar (.ics) string.
- * Works with Apple Calendar, Samsung Calendar, Google Calendar, Outlook, etc.
+ * Works with Apple Calendar, Outlook, and desktop calendar clients.
  */
 function buildIcsContent(params: {
   sessionId: number;
@@ -84,35 +126,51 @@ function buildIcsContent(params: {
     "END:VCALENDAR",
   ];
 
-  // RFC 5545 requires CRLF line endings
   return lines.join("\r\n") + "\r\n";
+}
+
+async function getCalendarRouteSession(req: Request, res: Response, idParam: string) {
+  const sessionId = parseInt(idParam, 10);
+
+  if (isNaN(sessionId)) {
+    res.status(400).send("Invalid session ID");
+    return null;
+  }
+
+  const session = await getTablesideSessionById(sessionId);
+
+  if (!session) {
+    res.status(404).send("Session not found");
+    return null;
+  }
+
+  return session;
 }
 
 export function registerCalendarRoute(app: Express): void {
   /**
    * GET /api/tableside/:id.ics
    *
-   * Plain server endpoint for the Apple / Outlook Calendar <a> link.
-   * Returns the ICS with Content-Disposition: inline so iOS Safari intercepts
-   * it and shows the native "Add to Calendar" sheet without any JS tricks.
+   * Non-Android: returns a normal inline ICS for iPhone, Outlook, desktop, etc.
+   * Android: never returns ICS. Android gets a native calendar insert intent.
    */
   app.get("/api/tableside/:id.ics", async (req: Request, res: Response) => {
-    const sessionId = parseInt(req.params.id, 10);
-
-    if (isNaN(sessionId)) {
-      res.status(400).send("Invalid session ID");
-      return;
-    }
-
-    const session = await getTablesideSessionById(sessionId);
-
-    if (!session) {
-      res.status(404).send("Session not found");
-      return;
-    }
+    const session = await getCalendarRouteSession(req, res, req.params.id);
+    if (!session) return;
 
     const start = new Date(session.startTime);
     const end = new Date(session.endTime);
+
+    if (isAndroidRequest(req)) {
+      redirectAndroidToNativeCalendar(res, {
+        title: session.title,
+        start,
+        end,
+        location: session.location || undefined,
+        description: session.description || undefined,
+      });
+      return;
+    }
 
     const icsContent = buildIcsContent({
       sessionId: session.id,
@@ -132,26 +190,26 @@ export function registerCalendarRoute(app: Express): void {
   /**
    * GET /api/calendar/:sessionId
    *
-   * Backward-compatible alias for older links. Keep this inline so stale
-   * /api/calendar/:id links do not force the browser download flow.
+   * Backward-compatible alias for older ICS links. Android is still blocked
+   * from receiving a downloadable calendar file.
    */
   app.get("/api/calendar/:sessionId", async (req: Request, res: Response) => {
-    const sessionId = parseInt(req.params.sessionId, 10);
-
-    if (isNaN(sessionId)) {
-      res.status(400).send("Invalid session ID");
-      return;
-    }
-
-    const session = await getTablesideSessionById(sessionId);
-
-    if (!session) {
-      res.status(404).send("Session not found");
-      return;
-    }
+    const session = await getCalendarRouteSession(req, res, req.params.sessionId);
+    if (!session) return;
 
     const start = new Date(session.startTime);
     const end = new Date(session.endTime);
+
+    if (isAndroidRequest(req)) {
+      redirectAndroidToNativeCalendar(res, {
+        title: session.title,
+        start,
+        end,
+        location: session.location || undefined,
+        description: session.description || undefined,
+      });
+      return;
+    }
 
     const icsContent = buildIcsContent({
       sessionId: session.id,
@@ -171,26 +229,28 @@ export function registerCalendarRoute(app: Express): void {
   /**
    * GET /api/calendar/:sessionId/gcal
    *
-   * Explicit Google Calendar URL — kept as a server-side helper but no longer
-   * shown in the UI by default. Can be used for future integrations.
+   * Non-Android: opens Google Calendar web event editor.
+   * Android: never opens Google Calendar web. Android gets the native Google
+   * Calendar app intent instead.
    */
   app.get("/api/calendar/:sessionId/gcal", async (req: Request, res: Response) => {
-    const sessionId = parseInt(req.params.sessionId, 10);
-
-    if (isNaN(sessionId)) {
-      res.status(400).send("Invalid session ID");
-      return;
-    }
-
-    const session = await getTablesideSessionById(sessionId);
-
-    if (!session) {
-      res.status(404).send("Session not found");
-      return;
-    }
+    const session = await getCalendarRouteSession(req, res, req.params.sessionId);
+    if (!session) return;
 
     const start = new Date(session.startTime);
     const end = new Date(session.endTime);
+
+    if (isAndroidRequest(req)) {
+      redirectAndroidToNativeCalendar(res, {
+        title: session.title,
+        start,
+        end,
+        location: session.location || undefined,
+        description: session.description || undefined,
+        targetPackage: "com.google.android.calendar",
+      });
+      return;
+    }
 
     const p = new URLSearchParams({
       text: session.title,
