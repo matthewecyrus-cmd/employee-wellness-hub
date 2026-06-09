@@ -1,32 +1,7 @@
 import { trpc } from "@/lib/trpc";
+import { useState } from "react";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
 import { Link } from "wouter";
-
-function buildAndroidIntentUrl(params: {
-  title: string;
-  start: Date;
-  end: Date;
-  location?: string | null;
-  description?: string | null;
-  sessionId: number;
-}): string {
-  const startMs = params.start.getTime();
-  const endMs = params.end.getTime();
-  const parts = [
-    "intent://com.samsung.android.calendar/insertEvent#Intent",
-    "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.dir/event",
-    `S.title=${encodeURIComponent(params.title)}`,
-    params.location ? `S.eventLocation=${encodeURIComponent(params.location)}` : null,
-    params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
-    `S.beginTime=${startMs}`,
-    `S.endTime=${endMs}`,
-    `l.beginTime=${startMs}`,
-    `l.endTime=${endMs}`,
-    "end",
-  ].filter(Boolean).join(";");
-  return parts;
-}
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
@@ -54,6 +29,41 @@ const SESSION_ACCENTS = [
   { gradient: "linear-gradient(90deg, #10B981, #34D399)", glow: "rgba(16,185,129,0.45)" },
   { gradient: "linear-gradient(90deg, #F59E0B, #FCD34D)", glow: "rgba(245,158,11,0.45)" },
 ];
+
+type Accent = { gradient: string; glow: string };
+
+function IcsButton({ sessionId, accent }: { sessionId: number; accent: Accent }) {
+  const [tapped, setTapped] = useState(false);
+
+  function handleClick() {
+    setTapped(true);
+    // Reset instruction after 8 seconds
+    setTimeout(() => setTapped(false), 8000);
+  }
+
+  return (
+    <div className="mt-4">
+      <a
+        href={`/api/tableside/${sessionId}.ics`}
+        onClick={handleClick}
+        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+        style={{
+          background: accent.gradient,
+          boxShadow: `0 4px 14px -2px ${accent.glow}`,
+        }}
+      >
+        <CalendarPlus className="h-4 w-4" />
+        Add to My Calendar
+      </a>
+      {tapped && (
+        <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-300">
+          📲 <strong>Android:</strong> Tap <strong>"Open"</strong> in the download bar at the bottom of your screen to save the event to Samsung Calendar.<br />
+          🍎 <strong>iPhone:</strong> Tap <strong>"Add to Calendar"</strong> in the prompt that appears.
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Tableside() {
   const now = new Date();
@@ -109,7 +119,7 @@ export default function Tableside() {
       <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
           <span className="font-semibold">Pick a session that works for you</span> and tap
-          either <strong>Android</strong> or <strong>iPhone</strong> to add it directly to your phone's calendar.
+          "Add to My Calendar" — your phone will open the calendar save screen instantly.
         </p>
       </div>
 
@@ -134,15 +144,6 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
-          const androidHref = buildAndroidIntentUrl({
-            title: session.title,
-            start,
-            end,
-            location: session.location,
-            description: session.description,
-            sessionId: session.id,
-          });
-
           return (
             <div
               key={session.id}
@@ -190,34 +191,8 @@ export default function Tableside() {
                   )}
                 </div>
 
-                {/* ── Calendar CTAs — both buttons always visible on every device ──── */}
-                <div className="mt-4 flex flex-col gap-2">
-                  {/* Android: intent:// navigates in same tab for native OS interception */}
-                  <a
-                    href={androidHref}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                    style={{
-                      background: accent.gradient,
-                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                    }}
-                  >
-                    <CalendarPlus className="h-4 w-4" />
-                    Android Calendar
-                  </a>
-
-                  {/* iPhone / Outlook: server-side ICS download */}
-                  <a
-                    href={`/api/tableside/${session.id}.ics`}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
-                    style={{
-                      background: accent.gradient,
-                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
-                    }}
-                  >
-                    <CalendarPlus className="h-4 w-4" />
-                    iPhone Calendar
-                  </a>
-                </div>
+                {/* ── Calendar CTA ──────────────────────────────────────────── */}
+                <IcsButton sessionId={session.id} accent={accent} />
               </div>
             </div>
           );
