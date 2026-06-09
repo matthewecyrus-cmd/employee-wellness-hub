@@ -341,14 +341,22 @@ export default function Tableside() {
                 </div>
 
                 {/* ── Debug box — remove after testing */}
-                {i === 0 && (
-                  <div style={{ marginTop: 8, padding: "8px 10px", background: "#1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>
-                    <div><strong style={{ color: "#f8fafc" }}>isAndroid():</strong> {String(isAndroid())}</div>
-                    <div><strong style={{ color: "#f8fafc" }}>isIOS():</strong> {String(isIOS())}</div>
-                    <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>href:</strong> {buildCalendarHref({ title: session.title, start: new Date(session.startTime), end: new Date(session.endTime), location: session.location, description: session.description, sessionId: session.id })}</div>
-                    <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>UA:</strong> {navigator.userAgent}</div>
-                  </div>
-                )}
+                {i === 0 && (() => {
+                  const dbgStart = new Date(session.startTime);
+                  const dbgEnd = new Date(session.endTime);
+                  return (
+                    <div style={{ marginTop: 8, padding: "8px 10px", background: "#1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>
+                      <div><strong style={{ color: "#f8fafc" }}>isAndroid():</strong> {String(isAndroid())}</div>
+                      <div><strong style={{ color: "#f8fafc" }}>isIOS():</strong> {String(isIOS())}</div>
+                      <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>raw startTime:</strong> {String(session.startTime)} (type: {typeof session.startTime})</div>
+                      <div><strong style={{ color: "#f8fafc" }}>start.getTime():</strong> {String(dbgStart.getTime())}</div>
+                      <div><strong style={{ color: "#f8fafc" }}>start ISO:</strong> {dbgStart.toISOString()}</div>
+                      <div><strong style={{ color: "#f8fafc" }}>end.getTime():</strong> {String(dbgEnd.getTime())}</div>
+                      <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>href:</strong> {buildCalendarHref({ title: session.title, start: dbgStart, end: dbgEnd, location: session.location, description: session.description, sessionId: session.id })}</div>
+                      <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>UA:</strong> {navigator.userAgent}</div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
                 {isAndroid() ? (
