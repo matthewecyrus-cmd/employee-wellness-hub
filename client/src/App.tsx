@@ -13,7 +13,6 @@ import HealthCoaching from "./pages/HealthCoaching";
 import Safety from "./pages/Safety";
 import MensHealth from "./pages/MensHealth";
 import Announcements from "./pages/Announcements";
-import AndroidCalendarHelp from "./pages/AndroidCalendarHelp";
 
 function Router() {
   return (
@@ -23,7 +22,6 @@ function Router() {
 
       {/* Wellness section pages */}
       <Route path="/tableside" component={Tableside} />
-      <Route path="/tableside/:id/android-calendar" component={AndroidCalendarHelp} />
       <Route path="/lunch-learn" component={LunchLearn} />
       <Route path="/resources" component={Resources} />
       <Route path="/health-coaching" component={HealthCoaching} />

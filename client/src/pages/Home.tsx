@@ -11,6 +11,7 @@ import {
   Circle,
   Phone,
   Mail,
+  Settings2,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -130,36 +131,49 @@ export default function Home() {
       </main>
 
       {/* ── Footer / Contact ──────────────────────────────────────────────── */}
-      {(contactName || contactEmail || contactPhone) && (
-        <footer className="border-t border-slate-700/50 px-5 py-6 text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Questions?
-          </p>
-          {contactName && (
-            <p className="mt-1 text-sm font-semibold text-slate-300">{contactName}</p>
-          )}
-          <div className="mt-2 flex flex-col items-center gap-1">
-            {contactEmail && (
-              <a
-                href={`mailto:${contactEmail}`}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
-              >
-                <Mail className="h-3 w-3" />
-                {contactEmail}
-              </a>
+      <footer className="border-t border-slate-700/50 px-5 py-6 text-center">
+        {(contactName || contactEmail || contactPhone) && (
+          <>
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Questions?
+            </p>
+            {contactName && (
+              <p className="mt-1 text-sm font-semibold text-slate-300">{contactName}</p>
             )}
-            {contactPhone && (
-              <a
-                href={`tel:${contactPhone.replace(/\D/g, "")}`}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
-              >
-                <Phone className="h-3 w-3" />
-                {contactPhone}
-              </a>
-            )}
-          </div>
-        </footer>
-      )}
+            <div className="mt-2 flex flex-col items-center gap-1">
+              {contactEmail && (
+                <a
+                  href={`mailto:${contactEmail}`}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+                >
+                  <Mail className="h-3 w-3" />
+                  {contactEmail}
+                </a>
+              )}
+              {contactPhone && (
+                <a
+                  href={`tel:${contactPhone.replace(/\D/g, "")}`}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+                >
+                  <Phone className="h-3 w-3" />
+                  {contactPhone}
+                </a>
+              )}
+            </div>
+          </>
+        )}
+        {/* Discreet admin entry — inconspicuous gear icon */}
+        <div className="mt-4 flex justify-center">
+          <Link href="/admin">
+            <button
+              aria-label="Admin"
+              className="rounded-full p-2 text-slate-700 transition-colors duration-150 hover:text-slate-500 active:text-slate-400"
+            >
+              <Settings2 className="h-4 w-4" />
+            </button>
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }
