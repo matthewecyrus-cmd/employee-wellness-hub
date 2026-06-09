@@ -1,19 +1,24 @@
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
-import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { ArrowLeft, CalendarPlus, Clock, MapPin, Smartphone, Apple } from "lucide-react";
+import { Link } from "wouter";
 
-function isAndroid(): boolean {
-  const ua = navigator.userAgent;
-  // Normal Android UA
-  if (/android/i.test(ua)) return true;
-  // Desktop-mode Android: userAgentData.platform is not Windows/macOS/Linux on Android
-  const platform = (navigator as unknown as { userAgentData?: { platform?: string } })
-    .userAgentData?.platform?.toLowerCase() ?? "";
-  if (platform === "windows" || platform === "macos" || platform === "linux") return false;
-  // Touch device with no desktop platform signal = likely Android in desktop mode
-  if (navigator.maxTouchPoints > 0 && /linux|windows nt/i.test(ua)) return true;
-  return false;
+function buildGoogleCalendarUrl(
+  title: string,
+  description: string,
+  location: string,
+  start: Date,
+  end: Date
+): string {
+  const fmt = (d: Date) =>
+    d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: description,
+    location,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
 const MONTH_NAMES = [
@@ -45,31 +50,57 @@ const SESSION_ACCENTS = [
 
 type Accent = { gradient: string; glow: string };
 
-function IcsButton({ sessionId, accent }: { sessionId: number; accent: Accent }) {
-  const [, navigate] = useLocation();
+interface CalendarButtonsProps {
+  session: {
+    id: number;
+    title: string;
+    description?: string | null;
+    location?: string | null;
+    startTime: Date;
+    endTime: Date;
+  };
+  accent: Accent;
+}
 
-  function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (isAndroid()) {
-      // Navigate to the dedicated Android help page which auto-triggers download
-      e.preventDefault();
-      navigate(`/tableside/${sessionId}/android-calendar`);
-    }
-    // iPhone/desktop: let the href fire naturally — iOS shows native Add to Calendar prompt
-  }
+function CalendarButtons({ session, accent }: CalendarButtonsProps) {
+  const start = new Date(session.startTime);
+  const end = new Date(session.endTime);
+  const googleUrl = buildGoogleCalendarUrl(
+    session.title,
+    session.description ?? "",
+    session.location ?? "",
+    start,
+    end
+  );
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 flex gap-2">
+      {/* Android → Google Calendar (opens in browser, user taps Save) */}
       <a
-        href={`/api/tableside/${sessionId}.ics`}
-        onClick={handleClick}
-        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+        href={googleUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+        style={{
+          background: "linear-gradient(90deg, #22C55E, #16A34A)",
+          boxShadow: "0 4px 14px -2px rgba(34,197,94,0.45)",
+        }}
+      >
+        <Smartphone className="h-4 w-4 shrink-0" />
+        Android
+      </a>
+
+      {/* iPhone / Outlook → ICS file */}
+      <a
+        href={`/api/tableside/${session.id}.ics`}
+        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-bold text-white shadow-md transition-all duration-150 active:scale-95"
         style={{
           background: accent.gradient,
           boxShadow: `0 4px 14px -2px ${accent.glow}`,
         }}
       >
-        <CalendarPlus className="h-4 w-4" />
-        Add to My Calendar
+        <Apple className="h-4 w-4 shrink-0" />
+        iPhone
       </a>
     </div>
   );
@@ -128,8 +159,8 @@ export default function Tableside() {
       {/* ── Instruction Banner ────────────────────────────────────────────── */}
       <div className="mx-4 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
         <p className="text-sm leading-relaxed text-purple-200">
-          <span className="font-semibold">Pick a session that works for you</span> and tap
-          "Add to My Calendar" — your phone will open the calendar save screen instantly.
+          <span className="font-semibold">Pick a session that works for you.</span> Tap{" "}
+          <strong>Android</strong> or <strong>iPhone</strong> to add it to your calendar.
         </p>
       </div>
 
@@ -202,7 +233,7 @@ export default function Tableside() {
                 </div>
 
                 {/* ── Calendar CTA ──────────────────────────────────────────── */}
-                <IcsButton sessionId={session.id} accent={accent} />
+                <CalendarButtons session={session} accent={accent} />
               </div>
             </div>
           );
