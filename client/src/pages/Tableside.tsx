@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
+import type { MouseEvent } from "react";
 import { Link } from "wouter";
 
 const MONTH_NAMES = [
@@ -24,7 +25,6 @@ function formatTimeRange(start: Date, end: Date): string {
 /**
  * Builds an Android intent:// URI using ACTION_INSERT so the OS opens the
  * native calendar event-save screen directly on the first tap.
- * Falls back to the inline .ics endpoint if no calendar app handles the intent.
  */
 function buildAndroidIntentUrl(params: {
   title: string;
@@ -35,8 +35,7 @@ function buildAndroidIntentUrl(params: {
   sessionId: number;
 }): string {
   const parts = [
-    "intent://com.android.calendar/events",
-    "#Intent",
+    "intent://com.android.calendar/events#Intent",
     "scheme=content",
     "action=android.intent.action.INSERT",
     "type=vnd.android.cursor.item/event",
@@ -55,6 +54,11 @@ function isAndroid(): boolean {
   return /android/i.test(navigator.userAgent);
 }
 
+/** Returns true for iPhone/iPad Safari and iOS WebKit browsers. */
+function isIOS(): boolean {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 function buildCalendarHref(params: {
   title: string;
   start: Date;
@@ -67,6 +71,47 @@ function buildCalendarHref(params: {
     return buildAndroidIntentUrl(params);
   }
   return `/api/tableside/${params.sessionId}`;
+}
+
+function buildCalendarFileName(title: string): string {
+  const safeTitle = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return `${safeTitle || "tableside-session"}.ics`;
+}
+
+async function openIOSCalendarShare(params: {
+  title: string;
+  sessionId: number;
+}): Promise<boolean> {
+  const endpoint = `/api/tableside/${params.sessionId}`;
+
+  if (!("share" in navigator)) {
+    return false;
+  }
+
+  const response = await fetch(endpoint, { cache: "no-store" });
+  if (!response.ok) {
+    return false;
+  }
+
+  const icsText = await response.text();
+  const file = new File([icsText], buildCalendarFileName(params.title), {
+    type: "text/calendar",
+  });
+  const shareData = {
+    title: params.title,
+    files: [file],
+  };
+
+  if ("canShare" in navigator && !navigator.canShare(shareData)) {
+    return false;
+  }
+
+  await navigator.share(shareData);
+  return true;
 }
 
 // Accent colors for each session card (cycles through 4)
@@ -161,6 +206,22 @@ export default function Tableside() {
             description: session.description,
             sessionId: session.id,
           });
+          const handleCalendarClick = async (event: MouseEvent<HTMLAnchorElement>) => {
+            if (!isIOS() || isAndroid()) {
+              return;
+            }
+
+            event.preventDefault();
+
+            const openedShareSheet = await openIOSCalendarShare({
+              title: session.title,
+              sessionId: session.id,
+            });
+
+            if (!openedShareSheet) {
+              window.location.href = `/api/tableside/${session.id}`;
+            }
+          };
 
           return (
             <div
@@ -211,6 +272,7 @@ export default function Tableside() {
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
                 <a
                   href={calendarHref}
+                  onClick={handleCalendarClick}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
                   style={{
                     background: accent.gradient,

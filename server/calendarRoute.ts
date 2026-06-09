@@ -125,24 +125,25 @@ export function registerCalendarRoute(app: Express): void {
   }
 
   /**
-   * GET /api/tableside/:id.ics
-   *
-   * Registered FIRST so Express matches the literal ".ics" suffix before
-   * the generic :id wildcard. Returns Content-Disposition: inline so iOS
-   * Safari shows the native "Add to Calendar" sheet.
-   */
-  app.get("/api/tableside/:id.ics", async (req: Request, res: Response) => {
-    await sendTablesideCalendar(req, res, true);
-  });
-
-  /**
    * GET /api/tableside/:id
    *
-   * Primary mobile endpoint. No Content-Disposition so mobile browsers
-   * are less likely to treat the response as a downloaded file.
+   * Primary mobile endpoint. It intentionally has no .ics filename and no
+   * Content-Disposition header so mobile browsers are less likely to treat the
+   * response as a downloaded file.
    */
   app.get("/api/tableside/:id", async (req: Request, res: Response) => {
     await sendTablesideCalendar(req, res, false);
+  });
+
+  /**
+   * GET /api/tableside/:id.ics
+   *
+   * Plain server endpoint for the Apple / Outlook Calendar <a> link.
+   * Returns the ICS with Content-Disposition: inline so iOS Safari intercepts
+   * it and shows the native "Add to Calendar" sheet without any JS tricks.
+   */
+  app.get("/api/tableside/:id.ics", async (req: Request, res: Response) => {
+    await sendTablesideCalendar(req, res, true);
   });
 
   /**
