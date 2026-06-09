@@ -23,10 +23,8 @@ function formatTimeRange(start: Date, end: Date): string {
 }
 
 /**
- * Builds a Samsung Calendar intent:// URI using ACTION_INSERT so the OS
- * opens the native calendar event-save screen directly on the first tap.
- * Targets com.samsung.android.calendar with S.* extras for maximum
- * compatibility with Galaxy devices.
+ * Builds an Android calendar intent:// URI using ACTION_INSERT.
+ * Uses intent://insert#Intent which is handled by all Android calendar apps.
  */
 function buildAndroidIntentUrl(params: {
   title: string;
@@ -37,17 +35,17 @@ function buildAndroidIntentUrl(params: {
   sessionId: number;
 }): string {
   const parts = [
-    "intent://com.samsung.android.calendar#Intent",
+    "intent://insert#Intent",
     "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.item/event",
+    "type=vnd.android.cursor.dir/event",
     `S.title=${encodeURIComponent(params.title)}`,
-    ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
-    ...(params.location ? [`S.location=${encodeURIComponent(params.location)}`] : []),
-    `S.beginTime=${params.start.getTime()}`,
-    `S.endTime=${params.end.getTime()}`,
+    params.location ? `S.eventLocation=${encodeURIComponent(params.location)}` : null,
+    params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
+    `l.beginTime=${params.start.getTime()}`,
+    `l.endTime=${params.end.getTime()}`,
     "end",
-  ];
-  return parts.join(";");
+  ].filter(Boolean).join(";");
+  return parts;
 }
 
 /** Returns true when running on an Android browser. */
