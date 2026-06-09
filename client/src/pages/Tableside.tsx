@@ -129,16 +129,70 @@ const SESSION_ACCENTS = [
 ];
 
 export default function Tableside() {
-  // Eruda mobile dev console — remove after debugging
+  // Eruda mobile debug launcher — remove after debugging
   useEffect(() => {
+    // Inject eruda script
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/eruda";
-    script.onload = () => {
-      (window as unknown as Record<string, { init: () => void }>)["eruda"].init();
-    };
     document.body.appendChild(script);
+
+    const w = window as unknown as Record<string, { init: () => void; show: () => void } | undefined>;
+
+    const setup = () => {
+      if (w["eruda"]) {
+        w["eruda"]!.init();
+      }
+
+      // OPEN DEVTOOLS button
+      const btn = document.createElement("button");
+      btn.textContent = "OPEN DEVTOOLS";
+      btn.style.position = "fixed";
+      btn.style.right = "12px";
+      btn.style.bottom = "80px";
+      btn.style.zIndex = "999999";
+      btn.style.padding = "12px 14px";
+      btn.style.borderRadius = "10px";
+      btn.style.border = "2px solid #000";
+      btn.style.background = "#ffeb3b";
+      btn.style.color = "#000";
+      btn.style.fontSize = "13px";
+      btn.style.fontWeight = "800";
+      btn.style.boxShadow = "0 4px 12px rgba(0,0,0,.35)";
+      btn.onclick = () => {
+        if (w["eruda"]) {
+          w["eruda"]!.show();
+        } else {
+          alert("Eruda did not load.");
+        }
+      };
+      document.body.appendChild(btn);
+
+      // Status indicator
+      const status = document.createElement("div");
+      status.textContent = w["eruda"] ? "Eruda loaded" : "Eruda NOT loaded";
+      status.style.position = "fixed";
+      status.style.left = "12px";
+      status.style.bottom = "80px";
+      status.style.zIndex = "999999";
+      status.style.padding = "10px 12px";
+      status.style.borderRadius = "10px";
+      status.style.background = w["eruda"] ? "#d1fae5" : "#fee2e2";
+      status.style.color = "#000";
+      status.style.fontSize = "12px";
+      status.style.fontWeight = "700";
+      document.body.appendChild(status);
+    };
+
+    if (document.readyState === "complete") {
+      // Give eruda script a tick to execute after appending
+      script.onload = setup;
+    } else {
+      window.addEventListener("load", setup, { once: true });
+    }
+
     return () => {
-      document.body.removeChild(script);
+      // cleanup on unmount
+      document.querySelectorAll("[data-eruda-debug]").forEach((el) => el.remove());
     };
   }, []);
 
