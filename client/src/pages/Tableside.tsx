@@ -53,15 +53,28 @@ function isAndroid(): boolean {
   const uaDataPlatform = "userAgentData" in navigator
     ? (navigator.userAgentData as { platform?: string }).platform
     : "";
-  // Desktop-site mode: Android browser spoofs a desktop UA (Linux or Windows NT)
-  // but the device still reports touch points. Catch both Chrome (linux) and
-  // Edge (Windows NT 10.0) desktop-mode spoofing on Android.
+
+  // Explicit Android UA — most reliable signal.
+  if (/android/i.test(navigator.userAgent) || /android/i.test(uaDataPlatform || "")) {
+    return true;
+  }
+
+  // Real Windows/macOS/Linux desktops report their true platform in userAgentData.
+  // If the platform is explicitly Windows, macOS, or Linux, it is NOT Android.
+  const knownDesktopPlatform = /^(windows|macos|linux)$/i.test(uaDataPlatform || "");
+  if (knownDesktopPlatform) {
+    return false;
+  }
+
+  // Desktop-site mode fallback: Android browser spoofs a desktop UA but the
+  // device still has touch points. Only apply when uaDataPlatform is absent
+  // (older browsers that don't expose userAgentData).
   const hasTouchPoints = navigator.maxTouchPoints > 0;
   const desktopModeAndroid =
     hasTouchPoints &&
     (/linux/i.test(navigator.userAgent) || /windows nt/i.test(navigator.userAgent));
 
-  return /android/i.test(navigator.userAgent) || /android/i.test(uaDataPlatform || "") || desktopModeAndroid;
+  return desktopModeAndroid;
 }
 
 /** Returns true for iPhone/iPad Safari and iOS WebKit browsers. */
