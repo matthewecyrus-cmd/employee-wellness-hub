@@ -34,9 +34,6 @@ function buildAndroidIntentUrl(params: {
   description?: string | null;
   sessionId: number;
 }): string {
-  const icsFallback = encodeURIComponent(
-    `${window.location.origin}/api/tableside/${params.sessionId}`
-  );
   const parts = [
     "intent://com.android.calendar/events",
     "#Intent",
@@ -48,7 +45,6 @@ function buildAndroidIntentUrl(params: {
     ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
     `l.beginTime=${params.start.getTime()}`,
     `l.endTime=${params.end.getTime()}`,
-    `S.browser_fallback_url=${icsFallback}`,
     "end",
   ];
   return parts.join(";");
