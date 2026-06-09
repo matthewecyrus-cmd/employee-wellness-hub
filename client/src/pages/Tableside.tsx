@@ -1,7 +1,28 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, CalendarPlus, Clock, MapPin } from "lucide-react";
 import { Link } from "wouter";
-import CalendarButtons from "@/components/CalendarButtons";
+
+function buildAndroidIntentUrl(params: {
+  title: string;
+  start: Date;
+  end: Date;
+  location?: string | null;
+  description?: string | null;
+  sessionId: number;
+}): string {
+  const parts = [
+    "intent://insert#Intent",
+    "action=android.intent.action.INSERT",
+    "type=vnd.android.cursor.dir/event",
+    `S.title=${encodeURIComponent(params.title)}`,
+    params.location ? `S.eventLocation=${encodeURIComponent(params.location)}` : null,
+    params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
+    `l.beginTime=${params.start.getTime()}`,
+    `l.endTime=${params.end.getTime()}`,
+    "end",
+  ].filter(Boolean).join(";");
+  return parts;
+}
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
@@ -109,8 +130,6 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
-<<<<<<< Updated upstream
-=======
           const androidHref = buildAndroidIntentUrl({
             title: session.title,
             start,
@@ -119,7 +138,6 @@ export default function Tableside() {
             description: session.description,
             sessionId: session.id,
           });
->>>>>>> Stashed changes
 
           return (
             <div
@@ -168,19 +186,6 @@ export default function Tableside() {
                   )}
                 </div>
 
-<<<<<<< Updated upstream
-                {/* ── Calendar CTA: Dual Platform Buttons ──────────────────── */}
-                <CalendarButtons
-                  sessionId={session.id}
-                  title={session.title}
-                  startTime={start}
-                  endTime={end}
-                  location={session.location}
-                  description={session.description}
-                  accentGradient={accent.gradient}
-                  accentGlow={accent.glow}
-                />
-=======
                 {/* ── Calendar CTAs — both buttons always visible on every device ──── */}
                 <div className="mt-4 flex flex-col gap-2">
                   {/* Android: intent:// navigates in same tab for native OS interception */}
@@ -209,7 +214,6 @@ export default function Tableside() {
                     iPhone Calendar
                   </a>
                 </div>
->>>>>>> Stashed changes
               </div>
             </div>
           );
