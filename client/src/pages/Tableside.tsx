@@ -38,7 +38,8 @@ function buildAndroidIntentUrl(params: {
     "intent://com.android.calendar/events#Intent",
     "scheme=content",
     "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.item/event",
+    "category=android.intent.category.DEFAULT",
+    "type=vnd.android.cursor.dir/event",
     `S.title=${encodeURIComponent(params.title)}`,
     ...(params.location ? [`S.eventLocation=${encodeURIComponent(params.location)}`] : []),
     ...(params.description ? [`S.description=${encodeURIComponent(params.description)}`] : []),
@@ -51,7 +52,12 @@ function buildAndroidIntentUrl(params: {
 
 /** Returns true when running on an Android browser. */
 function isAndroid(): boolean {
-  return /android/i.test(navigator.userAgent);
+  const uaDataPlatform = "userAgentData" in navigator
+    ? (navigator.userAgentData as { platform?: string }).platform
+    : "";
+  const desktopModeAndroid = /linux/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+
+  return /android/i.test(navigator.userAgent) || /android/i.test(uaDataPlatform || "") || desktopModeAndroid;
 }
 
 /** Returns true for iPhone/iPad Safari and iOS WebKit browsers. */
