@@ -19,6 +19,7 @@ function buildAndroidIntentUrl(params: {
     params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
     `l.beginTime=${params.start.getTime()}`,
     `l.endTime=${params.end.getTime()}`,
+    "package=com.samsung.android.calendar",
     "end",
   ].filter(Boolean).join(";");
   return parts;
