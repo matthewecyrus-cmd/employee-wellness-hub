@@ -24,9 +24,8 @@ function formatTimeRange(start: Date, end: Date): string {
 
 /**
  * Builds an Android intent:// URI using ACTION_INSERT.
- * Chrome passes this to the OS intent resolver, which opens the native
- * calendar app (Samsung Calendar, Google Calendar, etc.) with the event
- * pre-filled. Falls back to the inline .ics endpoint if no app handles it.
+ * Uses vnd.android.cursor.dir/event — the correct MIME type for calendar insert
+ * on Samsung Calendar, AOSP Calendar, and other Android calendar apps.
  */
 function buildAndroidIntentUrl(params: {
   title: string;
@@ -36,25 +35,19 @@ function buildAndroidIntentUrl(params: {
   description?: string | null;
   sessionId: number;
 }): string {
-  const icsFallback = encodeURIComponent(
-    `${window.location.origin}/api/tableside/${params.sessionId}.ics`
-  );
   const parts = [
-    "intent://com.android.calendar/events",
-    "#Intent",
-    "scheme=content",
+    "intent://#Intent",
     "action=android.intent.action.INSERT",
-    "type=vnd.android.cursor.item/event",
+    "type=vnd.android.cursor.dir/event",
     `S.title=${encodeURIComponent(params.title)}`,
-    ...(params.location
-      ? [`S.eventLocation=${encodeURIComponent(params.location)}`]
-      : []),
     ...(params.description
       ? [`S.description=${encodeURIComponent(params.description)}`]
       : []),
+    ...(params.location
+      ? [`S.eventLocation=${encodeURIComponent(params.location)}`]
+      : []),
     `l.beginTime=${params.start.getTime()}`,
     `l.endTime=${params.end.getTime()}`,
-    `S.browser_fallback_url=${icsFallback}`,
     "end",
   ];
   return parts.join(";");
