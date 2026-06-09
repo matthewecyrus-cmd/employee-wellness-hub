@@ -13,13 +13,12 @@ function buildAndroidIntentUrl(params: {
   const startMs = params.start.getTime();
   const endMs = params.end.getTime();
   const parts = [
-    "intent://insert#Intent",
+    "intent://com.samsung.android.calendar/insertEvent#Intent",
     "action=android.intent.action.INSERT",
     "type=vnd.android.cursor.dir/event",
     `S.title=${encodeURIComponent(params.title)}`,
     params.location ? `S.eventLocation=${encodeURIComponent(params.location)}` : null,
     params.description ? `S.description=${encodeURIComponent(params.description)}` : null,
-    // Use both S. (string) and l. (long) prefixes for maximum Samsung Calendar compatibility
     `S.beginTime=${startMs}`,
     `S.endTime=${endMs}`,
     `l.beginTime=${startMs}`,
