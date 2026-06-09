@@ -340,6 +340,16 @@ export default function Tableside() {
                   )}
                 </div>
 
+                {/* ── Debug box — remove after testing */}
+                {i === 0 && (
+                  <div style={{ marginTop: 8, padding: "8px 10px", background: "#1e293b", borderRadius: 8, fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>
+                    <div><strong style={{ color: "#f8fafc" }}>isAndroid():</strong> {String(isAndroid())}</div>
+                    <div><strong style={{ color: "#f8fafc" }}>isIOS():</strong> {String(isIOS())}</div>
+                    <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>href:</strong> {buildCalendarHref({ title: session.title, start: new Date(session.startTime), end: new Date(session.endTime), location: session.location, description: session.description, sessionId: session.id })}</div>
+                    <div style={{ marginTop: 4 }}><strong style={{ color: "#f8fafc" }}>UA:</strong> {navigator.userAgent}</div>
+                  </div>
+                )}
+
                 {/* ── Calendar CTA ──────────────────────────────────────── */}
                 {isAndroid() ? (
                   /* Android: plain <a href> with intent:// URL — same-tab navigation required for Chrome to dispatch the intent */
