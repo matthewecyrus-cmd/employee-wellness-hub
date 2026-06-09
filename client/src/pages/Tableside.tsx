@@ -109,6 +109,17 @@ export default function Tableside() {
           const start = new Date(session.startTime);
           const end = new Date(session.endTime);
           const accent = SESSION_ACCENTS[i % SESSION_ACCENTS.length];
+<<<<<<< Updated upstream
+=======
+          const androidHref = buildAndroidIntentUrl({
+            title: session.title,
+            start,
+            end,
+            location: session.location,
+            description: session.description,
+            sessionId: session.id,
+          });
+>>>>>>> Stashed changes
 
           return (
             <div
@@ -157,6 +168,7 @@ export default function Tableside() {
                   )}
                 </div>
 
+<<<<<<< Updated upstream
                 {/* ── Calendar CTA: Dual Platform Buttons ──────────────────── */}
                 <CalendarButtons
                   sessionId={session.id}
@@ -168,6 +180,36 @@ export default function Tableside() {
                   accentGradient={accent.gradient}
                   accentGlow={accent.glow}
                 />
+=======
+                {/* ── Calendar CTAs — both buttons always visible on every device ──── */}
+                <div className="mt-4 flex flex-col gap-2">
+                  {/* Android: intent:// navigates in same tab for native OS interception */}
+                  <a
+                    href={androidHref}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Android Calendar
+                  </a>
+
+                  {/* iPhone / Outlook: server-side ICS download */}
+                  <a
+                    href={`/api/tableside/${session.id}.ics`}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition-all duration-150 active:scale-95"
+                    style={{
+                      background: accent.gradient,
+                      boxShadow: `0 4px 14px -2px ${accent.glow}`,
+                    }}
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    iPhone Calendar
+                  </a>
+                </div>
+>>>>>>> Stashed changes
               </div>
             </div>
           );
