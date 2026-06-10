@@ -1,0 +1,34 @@
+name: Patch hidden admin redirect
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/patch-admin-redirect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch redirect
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          s2 = s.replace("location.replace('hub-admin-editor.html')", "location.replace('hub-admin-editor.html?v='+Date.now())")
+          if s2 != s:
+              p.write_text(s2, encoding='utf-8')
+          PY
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet || git commit -m "Add cache buster to hidden admin redirect"
+          git diff --cached --quiet || git push
